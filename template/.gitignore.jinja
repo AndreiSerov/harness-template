@@ -1,0 +1,31 @@
+### Agentic development ###
+# Installed by scripts/sync-skills from .claude/skills.toml
+.claude/skills/
+# Local, per-machine agent state
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+CLAUDE.local.md
+
+### Secrets ###
+.env
+.env.*
+{%- if private_paths %}
+
+### Private data ###
+{%- for path in private_paths %}
+{{ path }}/
+{%- endfor %}
+{%- endif %}
+{%- if stack == "python-uv" %}
+
+### Python ###
+__pycache__/
+*.py[oc]
+build/
+dist/
+*.egg-info
+.venv/
+.pytest_cache/
+.ruff_cache/
+{%- endif %}

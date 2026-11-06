@@ -1,0 +1,81 @@
+_subdirectory: template
+_answers_file: .copier-answers.yml
+_min_copier_version: "9.4"
+_skip_if_exists:
+  # These belong to the project once created, so updates never touch them.
+  - AGENTS.md
+  - CLAUDE.md
+  - GLOSSARY.md
+  - .gitignore
+  - .claude/skills.toml
+  - scripts/check
+_message_after_copy: |
+  Next, from the project root:
+    scripts/sync-skills
+    scripts/doctor
+  Then fill in the project sections of AGENTS.md and review scripts/check.
+
+project_name:
+  type: str
+  help: Project name
+  default: "{{ _folder_name }}"
+
+description:
+  type: str
+  help: One sentence on what the project is
+  default: ""
+
+stack:
+  type: str
+  help: Stack, which decides what scripts/check runs
+  choices:
+    - python-uv
+    - generic
+  default: python-uv
+
+issue_tracker:
+  type: str
+  help: Where issues and specs live
+  choices:
+    - local-markdown
+    - github
+  default: local-markdown
+
+private_paths:
+  type: yaml
+  help: Folders with private data, gitignored and denied to agents, e.g. [transcripts]
+  default: "[]"
+
+optional_skills:
+  type: str
+  help: Skills to install beyond the core set
+  multiselect: true
+  choices:
+    wayfinder: skills/engineering/wayfinder
+    handoff: skills/productivity/handoff
+    improve-codebase-architecture: skills/engineering/improve-codebase-architecture
+    wizard: skills/engineering/wizard
+    wait-what: skills/productivity/wait-what
+    to-questionnaire: skills/productivity/to-questionnaire
+    grill-me: skills/productivity/grill-me
+    migrate-to-shoehorn (TypeScript): skills/misc/migrate-to-shoehorn
+  default: []
+
+use_opencode:
+  type: bool
+  help: Delegate isolated tickets to an external agent through opencode?
+  default: false
+
+ci:
+  type: bool
+  help: Add a GitHub Actions workflow?
+  default: true
+
+ci_runner:
+  type: str
+  help: GitHub Actions runner
+  choices:
+    - ubuntu-latest
+    - macos-latest
+  default: ubuntu-latest
+  when: "{{ ci }}"

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# The project's definition of done. The commit hook and CI both run this file.
+# It belongs to the project: add every check here, and keep slow manual ones out.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+{% if stack == "python-uv" %}
+uv run pytest -q
+uv run ruff check
+uv run ruff format --check
+{%- else %}
+echo "scripts/check is not configured yet: add this project's tests and linters." >&2
+exit 1
+{%- endif %}

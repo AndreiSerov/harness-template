@@ -1,0 +1,23 @@
+[project]
+name = "harness-template"
+version = "0.1.0"
+description = "Copier template for this agent harness; dependencies are only for testing it"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "copier>=9.4",
+    "pytest>=8",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+extend-include = ["template/scripts/sync-skills", "template/scripts/doctor"]

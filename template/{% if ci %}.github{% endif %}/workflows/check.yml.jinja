@@ -1,0 +1,21 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: {{ ci_runner }}
+    steps:
+      - uses: actions/checkout@v4
+{%- if stack == "python-uv" %}
+      - uses: astral-sh/setup-uv@v6
+{%- endif %}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: scripts/sync-skills
+      - run: scripts/doctor
+      - run: scripts/check

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": {
+    "external_directory": "deny",
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny"{% for path in private_paths %},
+      "*{{ path }}/*": "deny"{% endfor %}
+    }
+  }
+}
