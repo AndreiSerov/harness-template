@@ -94,6 +94,7 @@ def test_python_project_has_the_expected_files_and_executables(template, tmp_pat
         "docs/agents/issue-tracker.md",
         ".claude/agents/implementer.md",
         ".claude/agents/reviewer.md",
+        ".claude/agents/skill-scout.md",
         ".github/workflows/check.yml",
     ):
         assert (project / name).is_file(), name

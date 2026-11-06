@@ -26,5 +26,6 @@ Keep steps 1-3 in one unbroken context, so the spec and tickets build on the gri
 ## Harness upkeep
 
 - `scripts/sync-skills` installs the pinned skills after a clone. `scripts/sync-skills --update` pulls newer ones; review the printed changes before committing the moved pin.
+- The `skill-scout` subagent proposes external skills for this project's stack and domain, and installs nothing. To accept one, read the proposal, add its entry to `.claude/skills.toml`, run `scripts/sync-skills`, then read the installed skill before committing the pin.
 - `copier update` brings in template changes for the files the template owns.
 - `scripts/doctor` reports anything missing or out of date.
