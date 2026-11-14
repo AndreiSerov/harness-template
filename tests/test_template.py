@@ -316,6 +316,20 @@ def test_hook_checks_the_worktree_it_runs_in(project, tmp_path):
     assert call_hook(project, worktree).returncode == 2
 
 
+@pytest.mark.parametrize("command", ["cd {other} && git commit -m x", "git -C {other} commit -m x"])
+def test_hook_checks_the_repository_the_commit_goes_to(project, tmp_path, command):
+    other = tmp_path / "other"
+    other.mkdir()
+    git(other, "init", "-q", "-b", "main")
+    (project / "scripts/check").write_text("#!/bin/sh\nexit 1\n")
+    # From a red project, a commit to a repo without the harness passes.
+    assert call_hook(project, project, command.format(other=other)).returncode == 0
+    # From elsewhere, a commit to the red project is blocked, alone or after another commit.
+    back = command.format(other=project)
+    assert call_hook(project, other, back).returncode == 2
+    assert call_hook(project, other, f"git commit -m x; {back}").returncode == 2
+
+
 def call_edit_hook(project, command, cwd=None):
     payload = {"cwd": str(cwd or project), "tool_input": {"command": command}}
     return run(
@@ -423,6 +437,17 @@ def test_claim_lets_one_agent_hold_a_ticket_across_worktrees(project, tmp_path):
     assert run("scripts/claim", "05", "--by", "second", cwd=worktree).returncode == 0
     assert "second" in run("scripts/claim", "--list", cwd=project).stdout
     assert git(project, "status", "--porcelain") == ""
+
+
+def test_claim_gives_a_ticket_to_only_one_of_many_agents_at_once(project):
+    commit_all(project)
+    racers = [
+        subprocess.Popen(
+            ["scripts/claim", "07", "--by", f"agent-{n}"], cwd=project, stdout=subprocess.PIPE
+        )
+        for n in range(12)
+    ]
+    assert sorted(racer.wait() for racer in racers) == [0] + [1] * 11
 
 
 def test_session_stats_runs_without_any_logs(project, tmp_path):

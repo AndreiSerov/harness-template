@@ -11,6 +11,8 @@ v1.1 measured on the bench (`bench/README.md`) and cut back to what held up. Tic
 - Reviewer: a re-review is a full review again. In v1.1 it checked only the fix commits and passed a change that the hidden tests still failed; the v1.0 reviewer, reviewing fully, found a new blocking defect in round two.
 - Reviewer: a judgement call on structure or style is reported but does not block. In v1.1 a `CODING_STANDARDS.md` rule produced a blocking finding that did not change any result and cost a round.
 - Workflow: before review, the coordinator checks that the reported commit exists and `scripts/check` passes on it. On the bench one implementer handed back uncommitted with a red check, and the reviewer spent a round on it.
+- `scripts/claim`: taking a ticket is one atomic step, so two agents starting together can't both get it. The coordinator releases the claim before handing a ticket to a fresh implementer; before, the fresh implementer's own first step would find the old claim and stop.
+- Commit hook: checks the repository the commit goes to, following `cd dir` and `git -C dir`, not the session's folder. Before, a commit to another repository was blocked by this project's red check, and a commit into this project from elsewhere was not checked.
 - Implementer: no prose self-check. It doubled the cost on ticket 07 and did not raise the hidden-test score anywhere. Instead the ticket lists the acceptance checks the reviewer will run, and the implementer turns them into tests; a check that recurs becomes a test or a tool in the project.
 
 ### Kept from v1.1
