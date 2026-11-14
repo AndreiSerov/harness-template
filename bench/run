@@ -205,6 +205,8 @@ def main() -> int:
     source = str(args.repo) if args.repo else task["repo"]
     prepare(task, variant, source, args.repo or work, work)
     prompt = (args.task / "prompt.md").read_text(encoding="utf-8").replace("{workdir}", str(work))
+    if variant.get("prompt_append"):
+        prompt += (args.task / variant["prompt_append"]).read_text(encoding="utf-8")
 
     calls, rounds, sessions = [], [], []
     result = claude(prompt, "implementer", args, work)

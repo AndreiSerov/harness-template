@@ -25,3 +25,20 @@ paths = [
   "scripts/claim",
   "CODING_STANDARDS.md",
 ]
+
+# v1.2: generic harness files only, no project files from a later state (they named things the
+# base lacks). The ticket lists the reviewer's acceptance checks, as workflow.md now asks.
+[variants.v1_2]
+ref = "retro-process"
+fresh_from_return = 2
+prompt_append = "acceptance.md"
+paths = [
+  ".claude/agents/implementer.md",
+  ".claude/agents/reviewer.md",
+  ".claude/settings.json",
+  ".claude/hooks/no-in-place-edit.sh",
+  "docs/agents/workflow.md",
+  "docs/agents/agreements.md",
+  "scripts/claim",
+  "scripts/session-stats",
+]
