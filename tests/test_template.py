@@ -221,6 +221,18 @@ def test_doctor_reports_each_kind_of_problem(project):
         assert expected in done.stdout, expected
 
 
+def test_doctor_names_missing_recommended_tools_without_failing(project, tmp_path):
+    run("scripts/sync-skills", cwd=project)
+    bare = tmp_path / "bin"
+    bare.mkdir()
+    for tool in ("git", "python3"):
+        (bare / tool).symlink_to(shutil.which(tool))
+    done = run("scripts/doctor", cwd=project, env={**os.environ, "PATH": str(bare)})
+    assert "Harness OK" in done.stdout
+    for tool in ("rg", "sd", "ast-grep"):
+        assert f"note: {tool} is not installed" in done.stdout, tool
+
+
 def test_doctor_notices_skills_behind_the_pin(project, upstream):
     run("scripts/sync-skills", cwd=project)
     (upstream / "skills/alpha/SKILL.md").write_text("# newer\n")

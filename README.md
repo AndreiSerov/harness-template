@@ -2,6 +2,24 @@
 
 A [Copier](https://copier.readthedocs.io) template for an agent harness: the workflow, settings, hooks, subagents and pinned skills for working in a repository with Claude Code. It was extracted from `rt-speech`.
 
+## Prerequisites
+
+Agents in a generated project call these tools. `scripts/doctor` fails without the required ones and names any recommended one that is missing.
+
+| Tool | Needed | For |
+|---|---|---|
+| `git`, `python3` (3.11+) | required | the harness scripts |
+| `uv` | required for the `python-uv` stack | `scripts/check`, dependencies |
+| `claude` (Claude Code 2.1.295+) | required | the hooks and subagents |
+| `rg` (ripgrep) | recommended | search |
+| `sd` | recommended | text replace across files, the same on macOS and Linux |
+| `ast-grep` | recommended | structural code edits |
+| `gh` | when `issue_tracker` is `github` | issues and PRs |
+
+```sh
+brew install git uv ripgrep sd ast-grep gh   # macOS
+```
+
 ## Use it
 
 ```sh

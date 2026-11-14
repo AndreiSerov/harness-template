@@ -12,6 +12,7 @@ From a retro of `vovchik-furniture-kit`, stages 0–2, 15 tickets run by Claude 
 - `reviewer.md`: every finding in one report, each with a reproduction to paste as a failing test; a re-review checks only the fixes, and its new minor findings wait for the end of the stage; a mechanical finding names the check that would catch it.
 - `implementer.md`: claims the ticket, follows the project's ambiguity rule, uses Edit for targeted changes and a script for bulk ones, runs targeted tests and leaves `scripts/check` to the commit hook, goes through `docs/agents/self-check.md` if present, fixes a whole review in one commit.
 - `.claude/hooks/no-in-place-edit.sh`: blocks `sed -i` and `perl -i` on tracked files. A first version sent every Bash write of a tracked file to Edit; the bench showed it doubled responses on ticket 07 (31 against 15, $1.31 against $0.71) with the same hidden-test score, so it was narrowed.
+- `agreements.md` Editing files, read by every agent: Edit for a targeted change, `sd` for a text pattern across files, `ast-grep` for a structural change, previewed first; the in-place hook points to them. `scripts/doctor` requires `git` and `python3` and names a missing `rg`, `sd` or `ast-grep`; the README lists the prerequisites.
 - `.githooks/pre-commit`, turned on by `sync-skills` and checked by `doctor`: commits outside Claude Code run `scripts/check`.
 - `scripts/claim`: one ticket, one agent, across worktrees.
 - `scripts/session-stats`: the numbers below.

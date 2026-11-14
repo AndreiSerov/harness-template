@@ -4,6 +4,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -12,6 +13,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS = ROOT / ".claude" / "skills"
 REQUIRED_IGNORES = [".claude/skills/", ".claude/settings.local.json", ".claude/worktrees/"]
+# Tools agents call. Required ones fail the check; recommended ones are named but don't.
+REQUIRED_TOOLS = ["git", "python3"]
+RECOMMENDED_TOOLS = {
+    "rg": "search (ripgrep)",
+    "sd": "text replace across files",
+    "ast-grep": "structural code edits",
+}
 REQUIRED_FILES = ["AGENTS.md", "docs/agents/workflow.md", "docs/agents/agreements.md"]
 
 
@@ -85,8 +93,12 @@ def main() -> int:
         problems.append("scripts/check is missing or not executable")
     problems += [f"not gitignored: {p}" for p in REQUIRED_IGNORES if not ignored(p)]
     problems += check_git_hooks() + check_skills() + check_references() + check_settings()
+    problems += [f"tool not installed: {t}" for t in REQUIRED_TOOLS if not shutil.which(t)]
     for problem in problems:
         print(f"- {problem}")
+    for tool, use in RECOMMENDED_TOOLS.items():
+        if not shutil.which(tool):
+            print(f"- note: {tool} is not installed ({use}); see the README's Prerequisites")
     print("Harness OK" if not problems else f"{len(problems)} problem(s) found")
     return 1 if problems else 0
 
