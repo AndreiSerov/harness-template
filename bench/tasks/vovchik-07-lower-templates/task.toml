@@ -1,0 +1,25 @@
+# Ticket 07 of vovchik-furniture-kit: lower templates (base_drawers, base_sink, base_bottle,
+# dishwasher_panel). Review sent it back for templates that ignored `shelves` and still read the
+# hinge table though they have no hinges. The original run was Codex; its prompt is encrypted
+# in the log, so prompt.md is written in the coordinator's style of the Claude tickets.
+repo = "git@github.com:AndreiSerov/vovchik-furniture-kit.git"
+base = "aa03ab3"           # the commit before the ticket
+first_handback = "6d8bc4f" # 8/12 hidden tests
+final = "ed17f69"          # 12/12
+
+[variants.v1_0]
+ref = ""
+paths = []
+
+[variants.v1_1]
+ref = "retro-process"
+paths = [
+  ".claude/agents/implementer.md",
+  ".claude/agents/reviewer.md",
+  ".claude/settings.json",
+  ".claude/hooks/edit-with-edit-tool.sh",
+  "docs/agents/workflow.md",
+  "docs/agents/self-check.md",
+  "scripts/claim",
+  "CODING_STANDARDS.md",
+]
