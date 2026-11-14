@@ -10,8 +10,8 @@ From a retro of `vovchik-furniture-kit`, stages 0–2, 15 tickets run by Claude 
 
 - `workflow.md`: a Review rounds section. Open decisions are settled before the build; one review gives one report and one fix commit; a fresh implementer takes over from the second return; a second implementer builds the next independent ticket during review; hard tickets may run on a stronger model.
 - `reviewer.md`: every finding in one report, each with a reproduction to paste as a failing test; a re-review checks only the fixes, and its new minor findings wait for the end of the stage; a mechanical finding names the check that would catch it.
-- `implementer.md`: claims the ticket, follows the project's ambiguity rule, edits with the Edit tool, runs targeted tests, goes through `docs/agents/self-check.md` if present, fixes a whole review in one commit.
-- `.claude/hooks/edit-with-edit-tool.sh`: a Bash command that writes a tracked file is blocked and sent to the Edit tool.
+- `implementer.md`: claims the ticket, follows the project's ambiguity rule, uses Edit for targeted changes and a script for bulk ones, runs targeted tests and leaves `scripts/check` to the commit hook, goes through `docs/agents/self-check.md` if present, fixes a whole review in one commit.
+- `.claude/hooks/no-in-place-edit.sh`: blocks `sed -i` and `perl -i` on tracked files. A first version sent every Bash write of a tracked file to Edit; the bench showed it doubled responses on ticket 07 (31 against 15, $1.31 against $0.71) with the same hidden-test score, so it was narrowed.
 - `.githooks/pre-commit`, turned on by `sync-skills` and checked by `doctor`: commits outside Claude Code run `scripts/check`.
 - `scripts/claim`: one ticket, one agent, across worktrees.
 - `scripts/session-stats`: the numbers below.
@@ -36,7 +36,7 @@ Across tickets 01–13, every ticket needed at least one review-fix commit. Find
 
 - Review-fix commits per ticket: at most 1 for most tickets, down from 1–3.
 - Rework time: well under the first build's multiple of ~9×.
-- `cut-offs`: 0; `bash-writes` of tracked files: 0.
+- `cut-offs`: 0, through a fresh implementer before the context passes ~150k.
 - No ticket claimed twice.
 
 ### Observed

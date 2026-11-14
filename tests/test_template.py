@@ -106,7 +106,7 @@ def test_python_project_has_the_expected_files_and_executables(template, tmp_pat
         "scripts/claim",
         "scripts/session-stats",
         ".claude/hooks/check-before-commit.sh",
-        ".claude/hooks/edit-with-edit-tool.sh",
+        ".claude/hooks/no-in-place-edit.sh",
         ".githooks/pre-commit",
     ):
         assert os.access(project / name, os.X_OK), name
@@ -307,7 +307,7 @@ def test_hook_checks_the_worktree_it_runs_in(project, tmp_path):
 def call_edit_hook(project, command, cwd=None):
     payload = {"cwd": str(cwd or project), "tool_input": {"command": command}}
     return run(
-        str(project / ".claude/hooks/edit-with-edit-tool.sh"),
+        str(project / ".claude/hooks/no-in-place-edit.sh"),
         check=False,
         input=json.dumps(payload),
     )
@@ -316,33 +316,33 @@ def call_edit_hook(project, command, cwd=None):
 @pytest.mark.parametrize(
     "command",
     [
-        "python3 - <<'E'\np='AGENTS.md'\ns=open(p).read()\nopen(p,'w').write(s)\nE",
-        "python -c \"from pathlib import Path; Path('AGENTS.md').write_text('x')\"",
         "sed -i '' 's/a/b/' AGENTS.md",
-        "cat > AGENTS.md <<EOF\nx\nEOF",
-        "echo x >> docs/agents/workflow.md",
-        "echo x | tee AGENTS.md",
+        "sed -i 's/a/b/' AGENTS.md",
+        "sed -E -i.bak 's/a/b/' docs/agents/workflow.md",
+        "perl -pi -e 's/a/b/' AGENTS.md",
+        "cd docs && sed -i '' 's/a/b/' ../AGENTS.md",
     ],
 )
-def test_edit_hook_sends_tracked_file_writes_to_the_edit_tool(project, command):
+def test_edit_hook_blocks_in_place_sed_and_perl_on_tracked_files(project, command):
     commit_all(project)
     done = call_edit_hook(project, command)
     assert done.returncode == 2
-    assert "Edit tool" in done.stderr
+    assert "in-place" in done.stderr
 
 
 @pytest.mark.parametrize(
     "command",
     [
         "uv run pytest -q 2>&1 | tail -3",
-        "echo x > /tmp/scratch.txt",
-        "python3 - <<'E'\nopen('/tmp/x.txt','w').write('1')\nE",
-        "python3 -c 'print(open(\"AGENTS.md\").read())'",
-        "echo x > notes-not-in-git.md",
-        "git log --oneline > /tmp/log.txt",
+        "python3 - <<'E'\np='AGENTS.md'\ns=open(p).read()\nopen(p,'w').write(s)\nE",
+        "cat > AGENTS.md <<EOF\nx\nEOF",
+        "echo x >> docs/agents/workflow.md",
+        "sed -n 1,20p AGENTS.md",
+        "sed 's/a/b/' AGENTS.md > /tmp/out.md",
+        "sed -i '' 's/a/b/' notes-not-in-git.md",
     ],
 )
-def test_edit_hook_leaves_reads_and_scratch_files_alone(project, command):
+def test_edit_hook_allows_scripts_redirects_and_scratch_edits(project, command):
     commit_all(project)
     assert call_edit_hook(project, command).returncode == 0
 
@@ -351,7 +351,7 @@ def test_settings_register_the_edit_hook(template, tmp_path):
     project = render(template, tmp_path / "p")
     settings = json.loads((project / ".claude/settings.json").read_text())
     commands = [h["command"] for h in settings["hooks"]["PreToolUse"][0]["hooks"]]
-    assert "${CLAUDE_PROJECT_DIR}/.claude/hooks/edit-with-edit-tool.sh" in commands
+    assert "${CLAUDE_PROJECT_DIR}/.claude/hooks/no-in-place-edit.sh" in commands
 
 
 def test_sync_turns_on_git_hooks_and_doctor_notices_when_they_are_off(project):

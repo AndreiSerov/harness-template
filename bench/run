@@ -78,7 +78,7 @@ def transcript_counts(work: Path, session: str) -> dict:
         for line in path.read_text(encoding="utf-8").splitlines():
             entry = json.loads(line)
             blocked += (
-                "Blocked: this Bash command writes tracked files" in line
+                ("Blocked: in-place" in line or "Blocked: this Bash command writes tracked files" in line)
                 and entry.get("type") == "user"
             )
             if entry.get("type") != "assistant":

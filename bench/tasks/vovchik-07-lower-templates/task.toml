@@ -17,7 +17,7 @@ paths = [
   ".claude/agents/implementer.md",
   ".claude/agents/reviewer.md",
   ".claude/settings.json",
-  ".claude/hooks/edit-with-edit-tool.sh",
+  ".claude/hooks/no-in-place-edit.sh",
   "docs/agents/workflow.md",
   "docs/agents/self-check.md",
   "scripts/claim",
