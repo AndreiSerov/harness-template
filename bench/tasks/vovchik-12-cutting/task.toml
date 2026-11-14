@@ -6,6 +6,7 @@ repo = "git@github.com:AndreiSerov/vovchik-furniture-kit.git"
 base = "28a2620"           # the commit before the ticket
 first_handback = "499ff2f" # 19/22 hidden tests
 final = "1ab4489"          # 22/22
+prefix = "12"
 
 [variants.v1_0]
 ref = ""
@@ -13,6 +14,7 @@ paths = []
 
 [variants.v1_1]
 ref = "retro-process"
+fresh_from_return = 2      # workflow.md: a fresh implementer from the second return
 paths = [
   ".claude/agents/implementer.md",
   ".claude/agents/reviewer.md",

@@ -11,6 +11,7 @@ file writes through Bash versus Edit. Appends one line to bench/results.jsonl.
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -78,9 +79,9 @@ def transcript_counts(work: Path, session: str) -> dict:
         for line in path.read_text(encoding="utf-8").splitlines():
             entry = json.loads(line)
             blocked += (
-                ("Blocked: in-place" in line or "Blocked: this Bash command writes tracked files" in line)
-                and entry.get("type") == "user"
-            )
+                "Blocked: in-place" in line
+                or "Blocked: this Bash command writes tracked files" in line
+            ) and entry.get("type") == "user"
             if entry.get("type") != "assistant":
                 continue  # other entries, such as api-request-blob, replay earlier messages
             message = entry.get("message") or {}
@@ -134,6 +135,51 @@ def grade(task_dir: Path, task: dict, work: Path) -> dict:
     }
 
 
+TOOLS = ["--allowedTools", "Bash", "Edit", "Write", "Read", "Grep", "Glob"]
+VERDICT = re.compile(r"VERDICT:\s*(PASS|FAIL)", re.IGNORECASE)
+
+
+def claude(
+    prompt: str, agent: str, args, work: Path, resume: str | None = None, model: str | None = None
+) -> dict:
+    """One headless Claude Code call; returns its JSON result with the wall time added."""
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    cmd = [
+        "claude",
+        "-p",
+        prompt,
+        "--agent",
+        agent,
+        "--model",
+        model or args.model,
+        "--output-format",
+        "json",
+    ]
+    cmd += ["--max-budget-usd", args.budget, "--permission-mode", "acceptEdits", *TOOLS]
+    if resume:
+        cmd += ["--resume", resume]
+    started = time.time()
+    done = sh(*cmd, cwd=work, check=False, env=env)
+    try:
+        result = json.loads(done.stdout)
+    except ValueError:
+        result = {"is_error": True, "result": (done.stdout + done.stderr)[-2000:]}
+    result["minutes"] = (time.time() - started) / 60
+    return result
+
+
+def review_prompt(task: dict, args) -> str:
+    return (args.task / "review.md").read_text(encoding="utf-8").replace("{base}", task["base"])
+
+
+def fix_prompt(task: dict, report: str) -> str:
+    return (
+        f"The review of your ticket returned findings. Fix every finding below, blocking or not, "
+        f"in one commit with the ticket's prefix (`{task['prefix']}: `), test first, scripts/check "
+        f"green, no push. Report the commit hash.\n\n{report}"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("task", type=Path)
@@ -142,7 +188,14 @@ def main() -> int:
         "--repo", type=Path, help="local checkout: clone source and installed skills"
     )
     parser.add_argument("--model", default="sonnet")
-    parser.add_argument("--budget", default="5", help="max USD for the run")
+    parser.add_argument("--budget", default="5", help="max USD per agent call")
+    parser.add_argument(
+        "--review-rounds",
+        type=int,
+        default=0,
+        help="run the reviewer after each hand-back and send its findings back, up to N returns",
+    )
+    parser.add_argument("--review-model", default="opus", help="the reviewer runs on the main model")
     parser.add_argument("--keep", action="store_true", help="keep the work folder")
     args = parser.parse_args()
 
@@ -153,58 +206,79 @@ def main() -> int:
     prepare(task, variant, source, args.repo or work, work)
     prompt = (args.task / "prompt.md").read_text(encoding="utf-8").replace("{workdir}", str(work))
 
-    started = time.time()
-    env = {k: v for k, v in __import__("os").environ.items() if k != "CLAUDECODE"}
-    done = sh(
-        "claude",
-        "-p",
-        prompt,
-        "--agent",
-        "implementer",
-        "--model",
-        args.model,
-        "--output-format",
-        "json",
-        "--max-budget-usd",
-        args.budget,
-        "--permission-mode",
-        "acceptEdits",
-        "--allowedTools",
-        "Bash",
-        "Edit",
-        "Write",
-        "Read",
-        "Grep",
-        "Glob",
-        cwd=work,
-        check=False,
-        env=env,
-    )
-    minutes = (time.time() - started) / 60
-    try:
-        result = json.loads(done.stdout)
-    except ValueError:
-        result = {"is_error": True, "result": (done.stdout + done.stderr)[-2000:]}
+    calls, rounds, sessions = [], [], []
+    result = claude(prompt, "implementer", args, work)
+    calls.append(result)
+    sessions.append(result.get("session_id", "-"))
+    rounds.append({"round": 0, **grade(args.task, task, work)})
+    returns = 0
+    for n in range(1, args.review_rounds + 1):
+        review = claude(review_prompt(task, args), "reviewer", args, work, model=args.review_model)
+        calls.append(review)
+        report = review.get("result") or ""
+        verdict = (VERDICT.findall(report) or ["?"])[-1].upper()
+        rounds[-1].update(
+            verdict=verdict,
+            review_minutes=round(review["minutes"], 1),
+            review_usd=review.get("total_cost_usd"),
+            review_report=report[-3000:],
+        )
+        if verdict == "PASS":
+            break
+        returns += 1
+        # Coordinator policy of the variant: a fresh implementer from this return on, or resume.
+        fresh = n >= variant.get("fresh_from_return", 10**6)
+        fix = claude(
+            fix_prompt(task, report),
+            "implementer",
+            args,
+            work,
+            resume=None if fresh else sessions[-1],
+        )
+        calls.append(fix)
+        sessions.append(fix.get("session_id", "-"))
+        rounds.append({"round": n, "fresh": fresh, **grade(args.task, task, work)})
+    if args.review_rounds and rounds[-1].get("verdict") is None:
+        review = claude(review_prompt(task, args), "reviewer", args, work, model=args.review_model)
+        calls.append(review)
+        report = review.get("result") or ""
+        rounds[-1].update(
+            verdict=(VERDICT.findall(report) or ["?"])[-1].upper(),
+            review_minutes=round(review["minutes"], 1),
+            review_usd=review.get("total_cost_usd"),
+            review_report=report[-3000:],
+        )
 
+    counts = {}
+    for session in set(sessions):
+        for key, value in transcript_counts(work, session).items():
+            counts[key] = counts.get(key, 0) + value
     record = {
         "task": args.task.name,
         "variant": args.variant,
         "model": args.model,
         "date": time.strftime("%Y-%m-%d %H:%M"),
-        "minutes": round(minutes, 1),
-        "cost_usd": result.get("total_cost_usd"),
-        "turns": result.get("num_turns"),
-        "error": result.get("is_error"),
-        **grade(args.task, task, work),
-        **transcript_counts(work, result.get("session_id", "-")),
-        "report": (result.get("result") or "")[-1500:],
+        "review_rounds": args.review_rounds,
+        "returns": returns,
+        "minutes": round(sum(c["minutes"] for c in calls), 1),
+        "cost_usd": round(sum(c.get("total_cost_usd") or 0 for c in calls), 4),
+        "error": any(c.get("is_error") for c in calls),
+        **{k: v for k, v in rounds[0].items() if k not in ("round",)},
+        "final": {
+            k: v for k, v in rounds[-1].items() if k.startswith("hidden") or k == "check_green"
+        },
+        "rounds": rounds,
+        **counts,
+        "report": (calls[-1].get("result") or "")[-1500:],
         "work": str(work) if args.keep else None,
     }
     with (BENCH / "results.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    print(
-        json.dumps({k: v for k, v in record.items() if k != "report"}, ensure_ascii=False, indent=1)
-    )
+    summary = {k: v for k, v in record.items() if k not in ("report", "rounds")}
+    summary["rounds"] = [
+        {k: v for k, v in r.items() if k != "review_report" and k != "commits"} for r in rounds
+    ]
+    print(json.dumps(summary, ensure_ascii=False, indent=1))
     if not args.keep:
         shutil.rmtree(work.parent, ignore_errors=True)
     return 0
