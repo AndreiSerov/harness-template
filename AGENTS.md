@@ -25,6 +25,8 @@ A change to `.claude/settings.json.jinja` or `.claude/hooks/` also needs real `c
 
 Copier takes versions from git tags, so `copier update` sees a change only after it is committed and tagged. Tests make their own committed and tagged copy, so they run on uncommitted work.
 
+Every release gets a `CHANGELOG.md` entry before its tag: the changes, the behaviour each is meant to change with the baseline numbers from `scripts/session-stats`, the expected effect, and an **Observed** section. A retro on a project that ran a stage on the release fills in **Observed**, so the next change starts from measured results.
+
 ## Conventions
 
 - Commit messages end at the body, with no `Co-Authored-By` line.
