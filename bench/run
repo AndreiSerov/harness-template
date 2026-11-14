@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Run one benchmark task on one harness variant and grade the implementer's first hand-back.
+
+  bench/run <task-dir> <variant> [--repo PATH] [--model sonnet] [--budget 5] [--keep]
+
+Clones the task's repo at its base commit, lays the variant's harness files over it, copies the
+installed skills from --repo, runs the `implementer` agent headless with the task's prompt, then
+adds the hidden tests and records: hidden tests passed, scripts/check, commits, cost, time, turns,
+file writes through Bash versus Edit. Appends one line to bench/results.jsonl.
+"""
+
+import argparse
+import json
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import tomllib
+from pathlib import Path
+
+BENCH = Path(__file__).resolve().parent
+BASH_WRITE = re.compile(r"python3? - <<|\bcat > |\bsed -i|\btee ")
+
+
+def sh(*args, cwd=None, check=True, **kwargs):
+    done = subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=False, **kwargs)
+    if check and done.returncode:
+        sys.exit(f"{' '.join(map(str, args))} failed:\n{done.stdout}\n{done.stderr}")
+    return done
+
+
+def prepare(task: dict, variant: dict, source: str, skills_from: Path, work: Path) -> None:
+    sh("git", "clone", "-q", source, str(work))
+    sh("git", "checkout", "-q", "-b", "bench", task["base"], cwd=work)
+    ref = variant["ref"]
+    if ref and sh("git", "rev-parse", "-q", "--verify", ref, cwd=work, check=False).returncode:
+        ref = f"origin/{ref}"  # a branch of the source shows up as a remote branch in the clone
+    for path in variant["paths"]:
+        content = sh("git", "show", f"{ref}:{path}", cwd=work).stdout
+        target = work / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+        mode = sh("git", "ls-tree", ref, path, cwd=work).stdout.split()[0]
+        if mode == "100755":
+            target.chmod(0o755)
+    if variant["paths"]:
+        sh("git", "add", "-A", cwd=work)
+        sh(
+            "git",
+            "-c",
+            "user.name=bench",
+            "-c",
+            "user.email=bench@localhost",
+            "commit",
+            "-qm",
+            "harness",
+            cwd=work,
+        )
+    installed = skills_from / ".claude/skills"
+    (work / ".claude/skills").mkdir(parents=True, exist_ok=True)
+    for skill in installed.iterdir() if installed.is_dir() else []:
+        if skill.is_dir() and not skill.is_symlink() and not skill.name.startswith("kitchen-"):
+            shutil.copytree(skill, work / ".claude/skills" / skill.name, dirs_exist_ok=True)
+    managed = installed / ".managed.json"
+    if managed.exists():
+        shutil.copy(managed, work / ".claude/skills/.managed.json")
+
+
+def transcript_counts(work: Path, session: str) -> dict:
+    folder = Path.home() / ".claude/projects" / re.sub(r"[^A-Za-z0-9]", "-", str(work.resolve()))
+    edits, bash_writes, blocked = set(), set(), 0
+    for path in folder.glob(f"{session}*.jsonl"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            entry = json.loads(line)
+            blocked += (
+                "Blocked: this Bash command writes tracked files" in line
+                and entry.get("type") == "user"
+            )
+            content = (entry.get("message") or {}).get("content")
+            for block in content if isinstance(content, list) else []:
+                if block.get("type") != "tool_use":
+                    continue
+                if block["name"] in ("Edit", "Write", "MultiEdit"):
+                    edits.add(block["id"])
+                elif block["name"] == "Bash" and BASH_WRITE.search(
+                    block["input"].get("command", "")
+                ):
+                    bash_writes.add(block["id"])
+    return {"edits": len(edits), "bash_writes": len(bash_writes), "edit_hook_blocks": blocked}
+
+
+def grade(task_dir: Path, task: dict, work: Path) -> dict:
+    shutil.copy(task_dir / "hidden_test.py", work / "tests/_hidden_test.py")
+    done = sh(
+        "uv",
+        "run",
+        "--quiet",
+        "pytest",
+        "-q",
+        "-p",
+        "no:cacheprovider",
+        "tests/_hidden_test.py",
+        cwd=work,
+        check=False,
+    )
+    passed = int(m[1]) if (m := re.search(r"(\d+) passed", done.stdout)) else 0
+    failed = int(m[1]) if (m := re.search(r"(\d+) failed", done.stdout)) else 0
+    failures = re.findall(r"FAILED tests/_hidden_test.py::(\w+)", done.stdout)
+    (work / "tests/_hidden_test.py").unlink()
+    check = sh("scripts/check", cwd=work, check=False).returncode == 0
+    commits = sh("git", "log", "--format=%s", f"{task['base']}..HEAD", cwd=work).stdout.splitlines()
+    return {
+        "hidden_passed": passed,
+        "hidden_total": passed + failed,
+        "hidden_failed": failures,
+        "check_green": check,
+        "commits": [c for c in commits if c != "harness"],
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("task", type=Path)
+    parser.add_argument("variant")
+    parser.add_argument(
+        "--repo", type=Path, help="local checkout: clone source and installed skills"
+    )
+    parser.add_argument("--model", default="sonnet")
+    parser.add_argument("--budget", default="5", help="max USD for the run")
+    parser.add_argument("--keep", action="store_true", help="keep the work folder")
+    args = parser.parse_args()
+
+    task = tomllib.loads((args.task / "task.toml").read_text(encoding="utf-8"))
+    variant = task["variants"][args.variant]
+    work = Path(tempfile.mkdtemp(prefix=f"bench-{args.task.name}-{args.variant}-")) / "repo"
+    source = str(args.repo) if args.repo else task["repo"]
+    prepare(task, variant, source, args.repo or work, work)
+    prompt = (args.task / "prompt.md").read_text(encoding="utf-8").replace("{workdir}", str(work))
+
+    started = time.time()
+    env = {k: v for k, v in __import__("os").environ.items() if k != "CLAUDECODE"}
+    done = sh(
+        "claude",
+        "-p",
+        prompt,
+        "--agent",
+        "implementer",
+        "--model",
+        args.model,
+        "--output-format",
+        "json",
+        "--max-budget-usd",
+        args.budget,
+        "--permission-mode",
+        "acceptEdits",
+        "--allowedTools",
+        "Bash",
+        "Edit",
+        "Write",
+        "Read",
+        "Grep",
+        "Glob",
+        cwd=work,
+        check=False,
+        env=env,
+    )
+    minutes = (time.time() - started) / 60
+    try:
+        result = json.loads(done.stdout)
+    except ValueError:
+        result = {"is_error": True, "result": (done.stdout + done.stderr)[-2000:]}
+
+    record = {
+        "task": args.task.name,
+        "variant": args.variant,
+        "model": args.model,
+        "date": time.strftime("%Y-%m-%d %H:%M"),
+        "minutes": round(minutes, 1),
+        "cost_usd": result.get("total_cost_usd"),
+        "turns": result.get("num_turns"),
+        "error": result.get("is_error"),
+        **grade(args.task, task, work),
+        **transcript_counts(work, result.get("session_id", "-")),
+        "report": (result.get("result") or "")[-1500:],
+        "work": str(work) if args.keep else None,
+    }
+    with (BENCH / "results.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    print(
+        json.dumps({k: v for k, v in record.items() if k != "report"}, ensure_ascii=False, indent=1)
+    )
+    if not args.keep:
+        shutil.rmtree(work.parent, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
