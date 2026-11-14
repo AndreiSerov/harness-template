@@ -36,6 +36,18 @@ One run per variant shows whether the pipeline works and how the harness changes
 | 2026-11-15 | vovchik-12 | v1_0 | 20/22 | 5.0 | 0.84 | 20 | 21 | 1 | 8 |
 | 2026-11-15 | vovchik-12 | v1_1, in-place hook only | 21/22 | 7.2 | 1.20 | 33 | 35 | 3 | 13 |
 
+### With review (`--review-rounds 3`, reviewer on Opus)
+
+| Date | Task | Variant | Returns | Hidden by round | Final | Min | USD (impl + review) |
+|---|---|---|---|---|---|---|---|
+| history | vovchik-12 | — | 2 | 20 → … → 22 | 22/22 | ~95 | — |
+| 2026-11-15 | vovchik-12 | v1_0 | 2 | 21 → 21 → 22 | 22/22 | 20.2 | 5.48 (2.63 + 2.85) |
+| 2026-11-15 | vovchik-12 | v1_1 | 1 | 19 → 19 | 19/22 | 17.3 | 4.48 (2.00 + 2.48) |
+
+v1_0 went back twice and ended correct; its second review found the strip thinner than the kerf, the defect the historical review found. v1_1 went back once and the reviewer passed it with three sheet formats still failing (a non-guillotine layout ends in an engine error); its fixes were real but outside what the hidden tests check, and one of its two blocking findings came from `CODING_STANDARDS.md` naming a function the base does not have yet. Fewer returns here meant a weaker result, not a better harness. One run each.
+
+Contamination to fix before the next runs: `CODING_STANDARDS.md` and `self-check.md` in the v1_1 overlay come from a later state of the project and name things the base lacks (`checks.part_fit_findings`, `scripts/petrov-sandbox`).
+
 **vovchik-12 (cutting).** The first task where the hidden tests separate the runs. v1_0 failed on two sheet formats: it picked a layout that cannot be cut guillotine-wise and stopped with an engine error, the same class of defect the historical review sent back. v1_1 cut every format correctly and checked the sheet trim against the saw's maximum, but placed a textured HDF part 2096 mm long along a 2070 mm grain by rotating it instead of naming it. One run each, so this is a signal, not a result. The narrowed hook let v1_1 write through scripts (13 Bash writes) and cost 33 responses against 20.
 
 Two fixes to the hidden tests before grading: the replayer now accepts a cut list that includes the perimeter trim, which the contract leaves open, and the trim test uses a 2060 mm maximum, which only the sheet trim exceeds, and accepts any `KitchenError`. Both are checked on history: 20/22 on the first hand-back, 22/22 on the fix.
