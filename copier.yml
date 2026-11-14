@@ -14,6 +14,9 @@ _message_after_copy: |
     scripts/sync-skills
     scripts/doctor
   Then fill in the project sections of AGENTS.md and review scripts/check.
+  {%- if ci %}
+  After the first push, protect main on GitHub and require the `check` status check.
+  {%- endif %}
 
 project_name:
   type: str

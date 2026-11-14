@@ -35,7 +35,8 @@ Worktrees need no extra setup: Claude Code reads an ignored `.claude/skills` fro
 ## Limits
 
 - **Deny rules aren't a security boundary.** In a test session, `Read` and `cat` on a denied folder were both refused, but Claude Code documents that a Bash rule matches the command text Claude writes, not every way to run a program. For a hard guarantee, turn on its [sandbox](https://code.claude.com/docs/en/sandboxing.md), which the template leaves off because it can break projects that need hardware or wider file access.
-- **The commit hook recognises commands by their text.** It handles `git -C . commit`, `git -c a=b commit` and `sh -c "git commit"`, but a commit hidden behind a script or alias gets past it, and `git -C other-repo commit` runs the checks of the current repo. CI remains the final check.
+- **The commit hook recognises commands by their text.** It handles `git -C . commit`, `git -c a=b commit` and `sh -c "git commit"`, but a commit hidden behind a script or alias gets past it, and `git -C other-repo commit` runs the checks of the current repo. It also runs `scripts/check`, which an agent can edit. If the hook itself fails or passes its 600-second timeout, every matching command is blocked, so a slower check needs a longer timeout. This needs Claude Code 2.1.295 or later.
+- **CI is the final check only once it's required.** In the repository's branch protection for `main`, require the `check` status check and turn on "Do not allow bypassing the above settings". GitHub enforces this on public repositories, and on private ones with a paid plan such as Pro. An agent using your admin credentials could still change the setting.
 - **`opencode.json` patterns** follow opencode's documented syntax, but the template's tests only check that the file renders.
 
 ## Develop

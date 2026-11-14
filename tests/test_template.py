@@ -106,7 +106,8 @@ def test_python_project_has_the_expected_files_and_executables(template, tmp_pat
     ):
         assert os.access(project / name, os.X_OK), name
     assert not (project / "opencode.json").exists()
-    assert "uv run pytest" in (project / "scripts/check").read_text()
+    check = (project / "scripts/check").read_text()
+    assert check.index("uv run ruff check") < check.index("uv run pytest -q -x")
 
 
 def test_settings_hide_attribution_and_deny_private_paths(template, tmp_path):
@@ -118,6 +119,7 @@ def test_settings_hide_attribution_and_deny_private_paths(template, tmp_path):
     assert "Read(./transcripts/**)" in deny
     assert "Read(./recordings/**)" in deny
     assert "transcripts/" in (project / ".gitignore").read_text()
+    assert settings["hooks"]["PreToolUse"][0]["hooks"][0]["onFailure"] == "block"
 
 
 def test_skills_manifest_is_valid_and_includes_chosen_optional_skills(template, tmp_path):
@@ -267,6 +269,25 @@ def test_hook_blocks_a_commit_when_check_fails(project):
 def test_hook_allows_a_commit_when_check_passes(project):
     (project / "scripts/check").write_text("#!/bin/sh\nexit 0\n")
     assert call_hook(project, project).returncode == 0
+
+
+def test_hook_blocks_a_commit_when_check_is_not_executable(project):
+    (project / "scripts/check").chmod(0o644)
+    done = call_hook(project, project)
+    assert done.returncode == 2
+    assert "missing or not executable" in done.stderr
+
+
+def test_hook_blocks_a_commit_when_check_is_missing(project):
+    (project / "scripts/check").unlink()
+    assert call_hook(project, project).returncode == 2
+
+
+def test_hook_leaves_a_repo_without_the_harness_alone(project, tmp_path):
+    other = tmp_path / "other"
+    other.mkdir()
+    git(other, "init", "-q", "-b", "main")
+    assert call_hook(project, other).returncode == 0
 
 
 def test_hook_checks_the_worktree_it_runs_in(project, tmp_path):
