@@ -2,7 +2,21 @@
 
 Each release records what changed in the harness, what agent behaviour it is meant to change, and the metric that shows whether it did. `scripts/session-stats` in a generated project gives the numbers. Fill **Observed** once a project has finished a stage on the release, and compare it with the baseline of the release before.
 
-## v1.1.0 — unreleased
+## v1.2.0 — unreleased
+
+v1.1 measured on the bench (`bench/README.md`) and cut back to what held up. Ticket 12 with review, one run each: v1.0 went back twice and ended right (22/22); v1.1 went back once and the reviewer passed it with three sheet formats still wrong (19/22).
+
+### Changes against v1.1
+
+- Reviewer: a re-review is a full review again. In v1.1 it checked only the fix commits and passed a change that the hidden tests still failed; the v1.0 reviewer, reviewing fully, found a new blocking defect in round two.
+- Reviewer: a judgement call on structure or style is reported but does not block. In v1.1 a `CODING_STANDARDS.md` rule produced a blocking finding that did not change any result and cost a round.
+- Implementer: no prose self-check. It doubled the cost on ticket 07 and did not raise the hidden-test score anywhere. Instead the ticket lists the acceptance checks the reviewer will run, and the implementer turns them into tests; a check that recurs becomes a test or a tool in the project.
+
+### Kept from v1.1
+
+All findings in one report with pasteable reproductions; open decisions settled before the build; `scripts/claim`; the in-place edit hook with `sd` and `ast-grep`; the git pre-commit hook for other agents; `scripts/check` left to the commit hook; `scripts/session-stats`; a fresh implementer from the second return and building during review (not yet exercised by the bench).
+
+## v1.1.0 — superseded by v1.2.0, never tagged
 
 From a retro of `vovchik-furniture-kit`, stages 0–2, 15 tickets run by Claude Code subagents, Codex and opencode.
 
