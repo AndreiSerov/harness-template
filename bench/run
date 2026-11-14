@@ -71,6 +71,9 @@ def prepare(task: dict, variant: dict, source: str, skills_from: Path, work: Pat
 def transcript_counts(work: Path, session: str) -> dict:
     folder = Path.home() / ".claude/projects" / re.sub(r"[^A-Za-z0-9]", "-", str(work.resolve()))
     edits, bash_writes, blocked = set(), set(), 0
+    # Claude Code writes each tool call of one model response as its own line, sharing the
+    # response's message id; group by it to count model responses, the real round trips.
+    responses: dict[str, set[str]] = {}
     for path in folder.glob(f"{session}*.jsonl"):
         for line in path.read_text(encoding="utf-8").splitlines():
             entry = json.loads(line)
@@ -78,17 +81,28 @@ def transcript_counts(work: Path, session: str) -> dict:
                 "Blocked: this Bash command writes tracked files" in line
                 and entry.get("type") == "user"
             )
-            content = (entry.get("message") or {}).get("content")
+            if entry.get("type") != "assistant":
+                continue  # other entries, such as api-request-blob, replay earlier messages
+            message = entry.get("message") or {}
+            content = message.get("content")
             for block in content if isinstance(content, list) else []:
                 if block.get("type") != "tool_use":
                     continue
+                responses.setdefault(message.get("id", block["id"]), set()).add(block["id"])
                 if block["name"] in ("Edit", "Write", "MultiEdit"):
                     edits.add(block["id"])
                 elif block["name"] == "Bash" and BASH_WRITE.search(
                     block["input"].get("command", "")
                 ):
                     bash_writes.add(block["id"])
-    return {"edits": len(edits), "bash_writes": len(bash_writes), "edit_hook_blocks": blocked}
+    return {
+        "tool_calls": sum(len(calls) for calls in responses.values()),
+        "responses": len(responses),
+        "batched_responses": sum(len(calls) > 1 for calls in responses.values()),
+        "edits": len(edits),
+        "bash_writes": len(bash_writes),
+        "edit_hook_blocks": blocked,
+    }
 
 
 def grade(task_dir: Path, task: dict, work: Path) -> dict:

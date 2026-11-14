@@ -21,15 +21,20 @@ One run per variant shows whether the pipeline works and how the harness changes
 
 ## Runs
 
-| Date | Task | Variant | Hidden | Min | USD | Turns | Edit | Bash writes | Hook blocks |
+`Responses` is model round trips, the number that drives time and cost; `calls` is tool calls, several of which can come in one response. The `turns` field of `claude -p` counts something closer to calls, so it is not used here.
+
+| Date | Task | Variant | Hidden | Min | USD | Responses | Calls | Edit | Bash writes |
 |---|---|---|---|---|---|---|---|---|---|
 | history | vovchik-02 | first hand-back `b9a606d` | 8/10 | ~6 | — | — | — | — | — |
-| 2026-11-15 | vovchik-02 | v1_0 | 9/10 | 1.1 | 0.27 | 7 | 0 | 4 | 0 |
-| 2026-11-15 | vovchik-02 | v1_1 | 9/10 | 1.2 | 0.29 | 17 | 9 | 0 | 1 |
+| 2026-11-15 | vovchik-02 | v1_0 | 9/10 | 1.1 | 0.27 | 6 | 6 | 0 | 4 |
+| 2026-11-15 | vovchik-02 | v1_1 | 9/10 | 1.2 | 0.29 | 8 | 16 | 9 | 0 |
+| 2026-11-15 | vovchik-02 | v1_1, batched edits | 8/10 | 1.3 | 0.26 | 8 | 17 | 10 | 1 (new file) |
 | history | vovchik-07 | first hand-back `6d8bc4f` (Codex) | 8/12 | — | — | — | — | — | — |
-| 2026-11-15 | vovchik-07 | v1_0 | 12/12 | 3.9 | 0.71 | 18 | 0 | 7 | 0 |
-| 2026-11-15 | vovchik-07 | v1_1 | 12/12 | 7.6 | 1.31 | 60 | 31 | 2 | 1 |
+| 2026-11-15 | vovchik-07 | v1_0 | 12/12 | 3.9 | 0.71 | 15 | 17 | 0 | 7 |
+| 2026-11-15 | vovchik-07 | v1_1 | 12/12 | 7.6 | 1.31 | 31 | 59 | 31 | 2 (new files) |
 
-**vovchik-07.** Both variants passed every hidden test, so on this ticket today's Sonnet does not miss what the historical hand-back missed, harness or not. v1_1 cost twice as much: 60 turns against 18, because each change is a separate Edit call and it ran the self-check (malformed widths, thresholds, a search for duplicate rules), which added 23 more tests of its own (301 against 278 in the suite). Its self-check also named `scripts/petrov-sandbox`, which does not exist at the task's base: overlaying project files from a later ref leaks references the base cannot satisfy. Its two Bash writes were new untracked files, which the hook allows.
+**Batched edits (vovchik-02).** The instruction to send independent edits together changed nothing here: this ticket was already 8 responses, with up to 8 Edits in one. v1_1 on ticket 02 costs the same as v1_0. The second v1_1 run scored 8/10 against 9/10 for the first, missing doctor's report of a real folder in the way: run-to-run noise of the size this table cannot resolve.
+
+**vovchik-07.** Both variants passed every hidden test, so on this ticket today's Sonnet does not miss what the historical hand-back missed, harness or not. v1_1 cost twice as much: 31 responses against 15. It already batched (12 responses held several calls), so the gap comes from smaller edits than v1_0's multi-place heredoc scripts, from reading the self-check and claiming the ticket, and from running the self-check (malformed widths, thresholds, a search for duplicate rules), which added 23 more tests of its own (301 against 278 in the suite). Its self-check also named `scripts/petrov-sandbox`, which does not exist at the task's base: overlaying project files from a later ref leaks references the base cannot satisfy. Its two Bash writes were new untracked files, which the hook allows.
 
 **vovchik-02.** Both runs found the major case the historical hand-back missed (a link to a removed skill) and both missed the re-review's minor one (an own link pointing at the wrong skill). The coordinator's prompt already names dangling links, which the original ticket did not stress as much. v1_1 changed tool use as intended: every file change went through Edit, and the hook stopped one Bash write.
