@@ -1,0 +1,25 @@
+# Ticket 12 of vovchik-furniture-kit: cutting (guillotine layout, cut order, kerf, trim).
+# Historically the costliest ticket: 88 min of review fixes after a 7 min first build. Review
+# found parts coming out larger than nominal next to a gap of 1..kerf, an unchecked sheet trim
+# length, and a textured sheet crash. prompt.md gives the result contract the tests read.
+repo = "git@github.com:AndreiSerov/vovchik-furniture-kit.git"
+base = "28a2620"           # the commit before the ticket
+first_handback = "499ff2f" # 19/22 hidden tests
+final = "1ab4489"          # 22/22
+
+[variants.v1_0]
+ref = ""
+paths = []
+
+[variants.v1_1]
+ref = "retro-process"
+paths = [
+  ".claude/agents/implementer.md",
+  ".claude/agents/reviewer.md",
+  ".claude/settings.json",
+  ".claude/hooks/no-in-place-edit.sh",
+  "docs/agents/workflow.md",
+  "docs/agents/self-check.md",
+  "scripts/claim",
+  "CODING_STANDARDS.md",
+]

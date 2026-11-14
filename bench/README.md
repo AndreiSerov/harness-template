@@ -32,7 +32,13 @@ One run per variant shows whether the pipeline works and how the harness changes
 | history | vovchik-07 | first hand-back `6d8bc4f` (Codex) | 8/12 | — | — | — | — | — | — |
 | 2026-11-15 | vovchik-07 | v1_0 | 12/12 | 3.9 | 0.71 | 15 | 17 | 0 | 7 |
 | 2026-11-15 | vovchik-07 | v1_1 | 12/12 | 7.6 | 1.31 | 31 | 59 | 31 | 2 (new files) |
+| history | vovchik-12 | first hand-back `499ff2f` | 20/22 | 7 | — | — | — | — | — |
+| 2026-11-15 | vovchik-12 | v1_0 | 20/22 | 5.0 | 0.84 | 20 | 21 | 1 | 8 |
+| 2026-11-15 | vovchik-12 | v1_1, in-place hook only | 21/22 | 7.2 | 1.20 | 33 | 35 | 3 | 13 |
 
+**vovchik-12 (cutting).** The first task where the hidden tests separate the runs. v1_0 failed on two sheet formats: it picked a layout that cannot be cut guillotine-wise and stopped with an engine error, the same class of defect the historical review sent back. v1_1 cut every format correctly and checked the sheet trim against the saw's maximum, but placed a textured HDF part 2096 mm long along a 2070 mm grain by rotating it instead of naming it. One run each, so this is a signal, not a result. The narrowed hook let v1_1 write through scripts (13 Bash writes) and cost 33 responses against 20.
+
+Two fixes to the hidden tests before grading: the replayer now accepts a cut list that includes the perimeter trim, which the contract leaves open, and the trim test uses a 2060 mm maximum, which only the sheet trim exceeds, and accepts any `KitchenError`. Both are checked on history: 20/22 on the first hand-back, 22/22 on the fix.
 **Batched edits (vovchik-02).** The instruction to send independent edits together changed nothing here: this ticket was already 8 responses, with up to 8 Edits in one. v1_1 on ticket 02 costs the same as v1_0. The second v1_1 run scored 8/10 against 9/10 for the first, missing doctor's report of a real folder in the way: run-to-run noise of the size this table cannot resolve.
 
 **vovchik-07.** Both variants passed every hidden test, so on this ticket today's Sonnet does not miss what the historical hand-back missed, harness or not. v1_1 cost twice as much: 31 responses against 15. It already batched (12 responses held several calls), so the gap comes from smaller edits than v1_0's multi-place heredoc scripts, from reading the self-check and claiming the ticket, and from running the self-check (malformed widths, thresholds, a search for duplicate rules), which added 23 more tests of its own (301 against 278 in the suite). Its self-check also named `scripts/petrov-sandbox`, which does not exist at the task's base: overlaying project files from a later ref leaks references the base cannot satisfy. Its two Bash writes were new untracked files, which the hook allows.
