@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -102,7 +103,11 @@ def test_python_project_has_the_expected_files_and_executables(template, tmp_pat
         "scripts/check",
         "scripts/sync-skills",
         "scripts/doctor",
+        "scripts/claim",
+        "scripts/session-stats",
         ".claude/hooks/check-before-commit.sh",
+        ".claude/hooks/edit-with-edit-tool.sh",
+        ".githooks/pre-commit",
     ):
         assert os.access(project / name, os.X_OK), name
     assert not (project / "opencode.json").exists()
@@ -297,6 +302,125 @@ def test_hook_checks_the_worktree_it_runs_in(project, tmp_path):
     git(project, "worktree", "add", "-q", str(worktree))
     (worktree / "scripts/check").write_text("#!/bin/sh\nexit 1\n")
     assert call_hook(project, worktree).returncode == 2
+
+
+def call_edit_hook(project, command, cwd=None):
+    payload = {"cwd": str(cwd or project), "tool_input": {"command": command}}
+    return run(
+        str(project / ".claude/hooks/edit-with-edit-tool.sh"),
+        check=False,
+        input=json.dumps(payload),
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python3 - <<'E'\np='AGENTS.md'\ns=open(p).read()\nopen(p,'w').write(s)\nE",
+        "python -c \"from pathlib import Path; Path('AGENTS.md').write_text('x')\"",
+        "sed -i '' 's/a/b/' AGENTS.md",
+        "cat > AGENTS.md <<EOF\nx\nEOF",
+        "echo x >> docs/agents/workflow.md",
+        "echo x | tee AGENTS.md",
+    ],
+)
+def test_edit_hook_sends_tracked_file_writes_to_the_edit_tool(project, command):
+    commit_all(project)
+    done = call_edit_hook(project, command)
+    assert done.returncode == 2
+    assert "Edit tool" in done.stderr
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "uv run pytest -q 2>&1 | tail -3",
+        "echo x > /tmp/scratch.txt",
+        "python3 - <<'E'\nopen('/tmp/x.txt','w').write('1')\nE",
+        "python3 -c 'print(open(\"AGENTS.md\").read())'",
+        "echo x > notes-not-in-git.md",
+        "git log --oneline > /tmp/log.txt",
+    ],
+)
+def test_edit_hook_leaves_reads_and_scratch_files_alone(project, command):
+    commit_all(project)
+    assert call_edit_hook(project, command).returncode == 0
+
+
+def test_settings_register_the_edit_hook(template, tmp_path):
+    project = render(template, tmp_path / "p")
+    settings = json.loads((project / ".claude/settings.json").read_text())
+    commands = [h["command"] for h in settings["hooks"]["PreToolUse"][0]["hooks"]]
+    assert "${CLAUDE_PROJECT_DIR}/.claude/hooks/edit-with-edit-tool.sh" in commands
+
+
+def test_sync_turns_on_git_hooks_and_doctor_notices_when_they_are_off(project):
+    run("scripts/sync-skills", cwd=project)
+    assert git(project, "config", "--get", "core.hooksPath") == ".githooks"
+    git(project, "config", "--unset", "core.hooksPath")
+    assert "git hooks are off" in run("scripts/doctor", cwd=project, check=False).stdout
+
+
+def test_sync_keeps_a_hooks_path_the_user_chose(project):
+    git(project, "config", "core.hooksPath", "my-hooks")
+    done = run("scripts/sync-skills", cwd=project)
+    assert git(project, "config", "--get", "core.hooksPath") == "my-hooks"
+    assert "set it to .githooks" in done.stdout
+
+
+def commit_outside_claude(project):
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    git(project, "add", "-A")
+    return run("git", *GIT_ID, "commit", "-q", "-m", "x", cwd=project, check=False, env=env)
+
+
+def test_git_hook_blocks_a_commit_outside_claude_when_check_fails(project):
+    git(project, "config", "core.hooksPath", ".githooks")
+    (project / "scripts/check").write_text("#!/bin/sh\necho 'tests are red'\nexit 1\n")
+    done = commit_outside_claude(project)
+    assert done.returncode != 0
+    assert "tests are red" in done.stderr
+
+
+def test_git_hook_allows_a_commit_outside_claude_when_check_passes(project):
+    git(project, "config", "core.hooksPath", ".githooks")
+    (project / "scripts/check").write_text("#!/bin/sh\nexit 0\n")
+    assert commit_outside_claude(project).returncode == 0
+
+
+def test_git_hook_leaves_claude_commits_to_the_claude_hook(project):
+    git(project, "config", "core.hooksPath", ".githooks")
+    (project / "scripts/check").write_text("#!/bin/sh\nexit 1\n")
+    git(project, "add", "-A")
+    env = {**os.environ, "CLAUDECODE": "1"}
+    assert (
+        run("git", *GIT_ID, "commit", "-q", "-m", "x", cwd=project, check=False, env=env).returncode
+        == 0
+    )
+
+
+def test_claim_lets_one_agent_hold_a_ticket_across_worktrees(project, tmp_path):
+    commit_all(project)
+    worktree = tmp_path / "wt"
+    git(project, "worktree", "add", "-q", str(worktree))
+    assert "claimed 05" in run("scripts/claim", "05", "--by", "first", cwd=project).stdout
+    taken = run("scripts/claim", "05", "--by", "second", cwd=worktree, check=False)
+    assert taken.returncode == 1
+    assert "first" in taken.stdout
+    run("scripts/claim", "05", "--release", cwd=project)
+    assert run("scripts/claim", "05", "--by", "second", cwd=worktree).returncode == 0
+    assert "second" in run("scripts/claim", "--list", cwd=project).stdout
+    assert git(project, "status", "--porcelain") == ""
+
+
+def test_session_stats_runs_without_any_logs(project, tmp_path):
+    commit_all(project, "01: first ticket")
+    (project / "fix.txt").write_text("x\n")
+    commit_all(project, "01: fix review findings")
+    env = {**os.environ, "HOME": str(tmp_path / "empty-home")}
+    done = run("scripts/session-stats", cwd=project, env=env)
+    assert re.search(r"^\s+01\s+2\s+1\s", done.stdout, re.MULTILINE), done.stdout
+    assert "skipped" not in done.stdout
 
 
 def test_update_brings_template_changes_and_keeps_project_files(project, template):
