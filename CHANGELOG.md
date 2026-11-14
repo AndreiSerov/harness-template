@@ -10,11 +10,16 @@ v1.1 measured on the bench (`bench/README.md`) and cut back to what held up. Tic
 
 - Reviewer: a re-review is a full review again. In v1.1 it checked only the fix commits and passed a change that the hidden tests still failed; the v1.0 reviewer, reviewing fully, found a new blocking defect in round two.
 - Reviewer: a judgement call on structure or style is reported but does not block. In v1.1 a `CODING_STANDARDS.md` rule produced a blocking finding that did not change any result and cost a round.
+- Workflow: before review, the coordinator checks that the reported commit exists and `scripts/check` passes on it. On the bench one implementer handed back uncommitted with a red check, and the reviewer spent a round on it.
 - Implementer: no prose self-check. It doubled the cost on ticket 07 and did not raise the hidden-test score anywhere. Instead the ticket lists the acceptance checks the reviewer will run, and the implementer turns them into tests; a check that recurs becomes a test or a tool in the project.
 
 ### Kept from v1.1
 
 All findings in one report with pasteable reproductions; open decisions settled before the build; `scripts/claim`; the in-place edit hook with `sd` and `ast-grep`; the git pre-commit hook for other agents; `scripts/check` left to the commit hook; `scripts/session-stats`; a fresh implementer from the second return and building during review (not yet exercised by the bench).
+
+### Observed on the bench
+
+Ticket 12 with review, three runs: 22/22 in every run, against 22/22 for v1.0 and 19/22 for v1.1. 1–2 real returns per run, each for a defect the reviewer confirmed with a probe (a crash on a valid layout, silent rounding of fractional millimetres, two commands disagreeing), none for style. 20–31 min and 5.0–6.8 USD a run, about half of it the Opus review, against 20.2 min and 5.48 USD for v1.0. Two first hand-backs already passed all hidden tests, which credits the acceptance checks in the ticket. One implementer handed back without committing, with `scripts/check` red: the commit hook does not stop an agent from ending without a commit, so the coordinator checks the hash before review. Not yet observed on a real project stage.
 
 ## v1.1.0 — superseded by v1.2.0, never tagged
 

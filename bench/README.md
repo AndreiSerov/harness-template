@@ -43,6 +43,13 @@ One run per variant shows whether the pipeline works and how the harness changes
 | history | vovchik-12 | — | 2 | 20 → … → 22 | 22/22 | ~95 | — |
 | 2026-11-15 | vovchik-12 | v1_0 | 2 | 21 → 21 → 22 | 22/22 | 20.2 | 5.48 (2.63 + 2.85) |
 | 2026-11-15 | vovchik-12 | v1_1 | 1 | 19 → 19 | 19/22 | 17.3 | 4.48 (2.00 + 2.48) |
+| 2026-11-15 | vovchik-12 | v1_2, run 1 | 3 (1 void) | 22 → 22 → 22 → 22 | 22/22 | 28.7 | 6.82 (3.05 + 3.77) |
+| 2026-11-15 | vovchik-12 | v1_2, run 2 | 2 (1 void) | 20 → 20 → 22 | 22/22 | 19.8 | 4.99 (2.55 + 2.43) |
+| 2026-11-15 | vovchik-12 | v1_2, run 3 | 2 | 22 → 22 → 22 | 22/22 | 30.7 | 5.91 (2.66 + 3.25) |
+
+v1_2, three runs in parallel. All three ended at 22/22, and no reviewer passed a change the hidden tests fail. Two first hand-backs were already 22/22, against 19–21 for v1_0 and v1_1; the acceptance checks in the ticket name the same class of defect as the hidden tests, so this measures checks written into the ticket, not a more careful model. In run 2 the first hand-back was left uncommitted with `scripts/check` red; the reviewer returned it, along with three crashes on valid orders, and a fresh implementer brought it to 22/22. Real returns were 1–2 per run, each for a defect a probe confirmed and the hidden tests don't check: a non-guillotine `EngineError` on valid rectpack layouts (fuzz, 10 of 2,000 sets), fractional kerf, trim and sheet sizes rounded silently against `DECISIONS.md`, and `kitchen cut` and `kitchen parts` disagreeing on countertop sheets at a fractional kerf. No return was for style. The cost is the review: 2.4–3.8 USD of Opus a run, against 2.5–3.1 for the implementer.
+
+"Void" is a return that wasn't one: in runs 1 and 2 the first review call hit the account's usage limit, the runner read the missing verdict as FAIL and sent the limit message back as findings. `bench/run` now stops a run on a failed call (verdict `ERROR`, field `aborted`) and hands a re-review the earlier reports, as a coordinator would; before that, one re-reviewer said it could not check the earlier findings were closed.
 
 v1_0 went back twice and ended correct; its second review found the strip thinner than the kerf, the defect the historical review found. v1_1 went back once and the reviewer passed it with three sheet formats still failing (a non-guillotine layout ends in an engine error); its fixes were real but outside what the hidden tests check, and one of its two blocking findings came from `CODING_STANDARDS.md` naming a function the base does not have yet. Fewer returns here meant a weaker result, not a better harness. One run each.
 

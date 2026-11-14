@@ -168,8 +168,28 @@ def claude(
     return result
 
 
-def review_prompt(task: dict, args) -> str:
-    return (args.task / "review.md").read_text(encoding="utf-8").replace("{base}", task["base"])
+def review_prompt(task: dict, args, earlier: list[str]) -> str:
+    prompt = (args.task / "review.md").read_text(encoding="utf-8").replace("{base}", task["base"])
+    if earlier:
+        # As the coordinator would: hand the re-review the earlier findings to check closed.
+        prompt += "\n\nThis is a re-review. Earlier reports, oldest first:\n\n" + "\n\n---\n\n".join(
+            earlier
+        )
+    return prompt
+
+
+def review(task: dict, args, work: Path, earlier: list[str]) -> tuple[dict, dict]:
+    """One review; returns the call and the fields for its round. A failed call gets verdict ERROR."""
+    call = claude(review_prompt(task, args, earlier), "reviewer", args, work, model=args.review_model)
+    report = call.get("result") or ""
+    verdict = "ERROR" if call.get("is_error") else (VERDICT.findall(report) or ["?"])[-1].upper()
+    fields = {
+        "verdict": verdict,
+        "review_minutes": round(call["minutes"], 1),
+        "review_usd": call.get("total_cost_usd"),
+        "review_report": report[-3000:],
+    }
+    return call, fields
 
 
 def fix_prompt(task: dict, report: str) -> str:
@@ -213,20 +233,18 @@ def main() -> int:
     calls.append(result)
     sessions.append(result.get("session_id", "-"))
     rounds.append({"round": 0, **grade(args.task, task, work)})
-    returns = 0
+    returns, reports, aborted = 0, [], None
     for n in range(1, args.review_rounds + 1):
-        review = claude(review_prompt(task, args), "reviewer", args, work, model=args.review_model)
-        calls.append(review)
-        report = review.get("result") or ""
-        verdict = (VERDICT.findall(report) or ["?"])[-1].upper()
-        rounds[-1].update(
-            verdict=verdict,
-            review_minutes=round(review["minutes"], 1),
-            review_usd=review.get("total_cost_usd"),
-            review_report=report[-3000:],
-        )
-        if verdict == "PASS":
+        call, fields = review(task, args, work, reports)
+        calls.append(call)
+        rounds[-1].update(fields)
+        if fields["verdict"] in ("PASS", "ERROR"):
+            # A failed call (usage limit, budget, crash) is not a review: stop rather than send
+            # its error text back as findings.
+            aborted = fields["review_report"][-300:] if fields["verdict"] == "ERROR" else None
             break
+        report = fields["review_report"]
+        reports.append(report)
         returns += 1
         # Coordinator policy of the variant: a fresh implementer from this return on, or resume.
         fresh = n >= variant.get("fresh_from_return", 10**6)
@@ -240,16 +258,15 @@ def main() -> int:
         calls.append(fix)
         sessions.append(fix.get("session_id", "-"))
         rounds.append({"round": n, "fresh": fresh, **grade(args.task, task, work)})
-    if args.review_rounds and rounds[-1].get("verdict") is None:
-        review = claude(review_prompt(task, args), "reviewer", args, work, model=args.review_model)
-        calls.append(review)
-        report = review.get("result") or ""
-        rounds[-1].update(
-            verdict=(VERDICT.findall(report) or ["?"])[-1].upper(),
-            review_minutes=round(review["minutes"], 1),
-            review_usd=review.get("total_cost_usd"),
-            review_report=report[-3000:],
-        )
+        if fix.get("is_error"):
+            aborted = (fix.get("result") or "")[-300:]
+            break
+    if args.review_rounds and not aborted and rounds[-1].get("verdict") is None:
+        call, fields = review(task, args, work, reports)
+        calls.append(call)
+        rounds[-1].update(fields)
+        if fields["verdict"] == "ERROR":
+            aborted = fields["review_report"][-300:]
 
     counts = {}
     for session in set(sessions):
@@ -265,6 +282,7 @@ def main() -> int:
         "minutes": round(sum(c["minutes"] for c in calls), 1),
         "cost_usd": round(sum(c.get("total_cost_usd") or 0 for c in calls), 4),
         "error": any(c.get("is_error") for c in calls),
+        "aborted": aborted,
         **{k: v for k, v in rounds[0].items() if k not in ("round",)},
         "final": {
             k: v for k, v in rounds[-1].items() if k.startswith("hidden") or k == "check_green"
