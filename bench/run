@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Run one benchmark task on one harness variant and grade the implementer's first hand-back.
+"""Run one benchmark task on one harness variant, with review, and grade every hand-back.
 
-  bench/run <task-dir> <variant> [--repo PATH] [--model sonnet] [--budget 5] [--keep]
+  bench/run <task-dir> <variant> [--repo PATH] [--model sonnet] [--review-rounds 3] [--keep]
 
-Clones the task's repo at its base commit, lays the variant's harness files over it, copies the
-installed skills from --repo, runs the `implementer` agent headless with the task's prompt, then
-adds the hidden tests and records: hidden tests passed, scripts/check, commits, cost, time, turns,
-file writes through Bash versus Edit. Appends one line to bench/results.jsonl.
+Clones the task's repo at its base commit, lays the variant's harness files over it (from the
+project at `ref`, then from this template at `template`), copies the installed skills from
+--repo, runs the `implementer` agent headless with the task's prompt, then the `reviewer`, and
+sends each failed review back, up to --review-rounds returns. Each hand-back is graded with the
+hidden tests. Records hidden tests by round, scripts/check, commits, cost, time, responses, file
+writes through Bash versus Edit. Appends one line to bench/results.jsonl.
 """
 
 import argparse
@@ -38,15 +40,21 @@ def prepare(task: dict, variant: dict, source: str, skills_from: Path, work: Pat
     ref = variant["ref"]
     if ref and sh("git", "rev-parse", "-q", "--verify", ref, cwd=work, check=False).returncode:
         ref = f"origin/{ref}"  # a branch of the source shows up as a remote branch in the clone
-    for path in variant["paths"]:
-        content = sh("git", "show", f"{ref}:{path}", cwd=work).stdout
+    overlays = [(work, ref, path, path) for path in variant["paths"]]
+    # Plain (non-Jinja) files of this template at a commit, for a version the project hasn't got.
+    overlays += [
+        (BENCH.parent, variant["template"], f"template/{path}", path)
+        for path in variant.get("template_paths", [])
+    ]
+    for repo, at, source_path, path in overlays:
+        content = sh("git", "show", f"{at}:{source_path}", cwd=repo).stdout
         target = work / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        mode = sh("git", "ls-tree", ref, path, cwd=work).stdout.split()[0]
+        mode = sh("git", "ls-tree", at, source_path, cwd=repo).stdout.split()[0]
         if mode == "100755":
             target.chmod(0o755)
-    if variant["paths"]:
+    if overlays:
         sh("git", "add", "-A", cwd=work)
         sh(
             "git",
@@ -187,7 +195,7 @@ def review(task: dict, args, work: Path, earlier: list[str]) -> tuple[dict, dict
         "verdict": verdict,
         "review_minutes": round(call["minutes"], 1),
         "review_usd": call.get("total_cost_usd"),
-        "review_report": report[-3000:],
+        "review_report": report,
     }
     return call, fields
 
@@ -212,12 +220,16 @@ def main() -> int:
     parser.add_argument(
         "--review-rounds",
         type=int,
-        default=0,
-        help="run the reviewer after each hand-back and send its findings back, up to N returns",
+        default=3,
+        help="returns of a failed review to the implementer before the run stops",
     )
     parser.add_argument("--review-model", default="opus", help="the reviewer runs on the main model")
     parser.add_argument("--keep", action="store_true", help="keep the work folder")
     args = parser.parse_args()
+    if args.review_rounds < 1:
+        parser.error("the bench always reviews: --review-rounds must be at least 1")
+    if not (args.task / "review.md").is_file():
+        parser.error(f"{args.task} has no review.md, the reviewer's prompt")
 
     task = tomllib.loads((args.task / "task.toml").read_text(encoding="utf-8"))
     variant = task["variants"][args.variant]
@@ -261,7 +273,7 @@ def main() -> int:
         if fix.get("is_error"):
             aborted = (fix.get("result") or "")[-300:]
             break
-    if args.review_rounds and not aborted and rounds[-1].get("verdict") is None:
+    if not aborted and rounds[-1].get("verdict") is None:
         call, fields = review(task, args, work, reports)
         calls.append(call)
         rounds[-1].update(fields)
@@ -289,7 +301,6 @@ def main() -> int:
         },
         "rounds": rounds,
         **counts,
-        "report": (calls[-1].get("result") or "")[-1500:],
         "work": str(work) if args.keep else None,
     }
     with (BENCH / "results.jsonl").open("a", encoding="utf-8") as fh:

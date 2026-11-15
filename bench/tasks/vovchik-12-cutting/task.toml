@@ -12,24 +12,33 @@ prefix = "12"
 ref = ""
 paths = []
 
-[variants.v1_1]
-ref = "retro-process"
-fresh_from_return = 2      # workflow.md: a fresh implementer from the second return
+# v1.2: generic harness files only, no project files from a later state (they named things the
+# base lacks). The ticket lists the reviewer's acceptance checks, as workflow.md now asks.
+[variants.v1_2]
+ref = "ec9b0f4"            # v1.2 on vovchik main; the retro-process branch was deleted after merge
+fresh_from_return = 2
+prompt_append = "acceptance.md"
 paths = [
   ".claude/agents/implementer.md",
   ".claude/agents/reviewer.md",
   ".claude/settings.json",
   ".claude/hooks/no-in-place-edit.sh",
   "docs/agents/workflow.md",
-  "docs/agents/self-check.md",
+  "docs/agents/agreements.md",
   "scripts/claim",
-  "CODING_STANDARDS.md",
+  "scripts/session-stats",
 ]
 
-# v1.2: generic harness files only, no project files from a later state (they named things the
-# base lacks). The ticket lists the reviewer's acceptance checks, as workflow.md now asks.
-[variants.v1_2]
-ref = "ec9b0f4"            # v1.2 on vovchik main; the retro-process branch was deleted after merge
+# v1.3: v1.2 with the template's v1.3 implementer, claim and session-stats laid over it.
+# workflow.md is not overlaid: on the bench the runner plays the coordinator.
+[variants.v1_3]
+ref = "ec9b0f4"
+template = "eecd335"       # harness-template commit of v1.3
+template_paths = [
+  ".claude/agents/implementer.md",
+  "scripts/claim",
+  "scripts/session-stats",
+]
 fresh_from_return = 2
 prompt_append = "acceptance.md"
 paths = [
