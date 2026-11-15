@@ -6,7 +6,11 @@ cd "$(dirname "$0")/.."
 {% if stack == "python-uv" %}
 uv run ruff check
 uv run ruff format --check
-uv run pytest -q -x
+# Tests run in parallel once pytest-xdist is a dev dependency: `uv add --dev pytest-xdist`.
+parallel=""
+if uv run python -c "import xdist" 2>/dev/null; then parallel="-n auto"; fi
+# shellcheck disable=SC2086 # $parallel is empty or two words
+uv run pytest -q -x $parallel
 {%- else %}
 echo "scripts/check is not configured yet: add this project's tests and linters." >&2
 exit 1

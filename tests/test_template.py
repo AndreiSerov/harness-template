@@ -450,6 +450,61 @@ def test_claim_gives_a_ticket_to_only_one_of_many_agents_at_once(project):
     assert sorted(racer.wait() for racer in racers) == [0] + [1] * 11
 
 
+@pytest.mark.parametrize(("has_xdist", "parallel"), [(0, True), (1, False)])
+def test_check_runs_tests_in_parallel_only_when_xdist_is_installed(
+    project, tmp_path, has_xdist, parallel
+):
+    bin_dir, log = tmp_path / "bin", tmp_path / "uv.log"
+    bin_dir.mkdir()
+    fake_uv = bin_dir / "uv"
+    fake_uv.write_text(
+        f'#!/bin/sh\ncase "$*" in *"import xdist"*) exit {has_xdist};; esac\necho "$*" >> {log}\n'
+    )
+    fake_uv.chmod(0o755)
+    run("scripts/check", cwd=project, env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"})
+    pytest_line = log.read_text().splitlines()[-1]
+    assert pytest_line.startswith("run pytest -q -x")
+    assert ("-n auto" in pytest_line) is parallel
+
+
+def test_claim_needs_refuses_a_checkout_without_the_tickets_commit(project, tmp_path):
+    commit_all(project, "base")
+    base = git(project, "rev-parse", "HEAD")
+    (project / "spec.md").write_text("decisions\n")
+    commit_all(project, "05: decisions and acceptance checks")
+    spec = git(project, "rev-parse", "HEAD")
+    old = tmp_path / "old"
+    git(project, "worktree", "add", "-q", "--detach", str(old), base)
+
+    refused = run("scripts/claim", "05", "--needs", spec, cwd=old, check=False)
+    assert refused.returncode == 1
+    assert "lacks" in refused.stdout
+    assert "05" not in run("scripts/claim", "--list", cwd=project).stdout
+    assert run("scripts/claim", "05", "--needs", spec, cwd=project).returncode == 0
+
+
+def test_session_stats_skips_unreadable_lines_and_counts_stalls(project, tmp_path):
+    commit_all(project)
+    home = tmp_path / "home"
+    folder = home / ".claude/projects" / re.sub(r"[^A-Za-z0-9]", "-", str(project.resolve()))
+    log = folder / "session" / "subagents" / "agent-1.jsonl"
+    log.parent.mkdir(parents=True)
+    entries = [
+        {"type": "assistant", "timestamp": "2026-11-15T04:00:00Z", "message": {"content": []}},
+        {"type": "assistant", "timestamp": "2026-11-15T04:01:00Z", "message": {"content": []}},
+        {"type": "user", "timestamp": "2026-11-15T04:16:00Z", "message": {"content": "next"}},
+    ]
+    lines = [json.dumps(e) for e in entries]
+    log.write_text("\n".join([lines[0], '{"type": "assistant", "trunc', *lines[1:]]) + "\n")
+    log.with_suffix(".meta.json").write_text(
+        '{"agentType": "reviewer", "description": "Review 05"}'
+    )
+    done = run("scripts/session-stats", cwd=project, env={**os.environ, "HOME": str(home)})
+    assert re.search(r"^reviewer\s+16\s+15\s.*Review 05$", done.stdout, re.MULTILINE), done.stdout
+    assert "1 unreadable log lines skipped" in done.stdout
+    assert "skipped," not in done.stdout
+
+
 def test_session_stats_runs_without_any_logs(project, tmp_path):
     commit_all(project, "01: first ticket")
     (project / "fix.txt").write_text("x\n")

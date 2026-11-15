@@ -2,6 +2,23 @@
 
 Each release records what changed in the harness, what agent behaviour it is meant to change, and the metric that shows whether it did. `scripts/session-stats` in a generated project gives the numbers. Fill **Observed** once a project has finished a stage on the release, and compare it with the baseline of the release before.
 
+## v1.3.0 — unreleased
+
+From the logs of vovchik stage 3 on v1.2 (tickets 16–35, 2026-11-15). The long tickets were long because the agents stood still, not because they worked: four subagents stalled for 138–272 min while the laptop slept on battery (`pmset` log: idle sleep, then a wake about every 15 minutes), then a usage limit. Three of eight returns had no blocking finding.
+
+### Changes against v1.2
+
+- Workflow: a review with only minor findings passes, and the findings wait for the end of the stage. Returns for tickets 19, 24 and 35 cost a fix round each and, for 19, an 18-minute re-review.
+- `scripts/claim --needs <commit>`: refuses a checkout without the ticket's latest commit; the coordinator names it in the brief. Ticket 26 was built in a worktree from `main`, without the decisions and acceptance checks written into the ticket on the stage branch, and came back before review.
+- `scripts/check` (python-uv): runs the tests in parallel (`-n auto`) once `pytest-xdist` is a dev dependency. On vovchik, 1107 tests took 93 s serially and 17.5 s on 15 cores, the same result on five runs; implementers run the whole suite about a dozen times a ticket, counting commits.
+- Implementer: runs only the tests it touched while it works, and leaves the whole suite to the commit hook.
+- `scripts/doctor` notes when the laptop is on battery; the workflow says to run long sessions on power with the lid open, under `caffeinate -i claude`.
+- `scripts/session-stats`: a `stalls` column (pauses of over 3 minutes) beside each subagent's minutes, and an unreadable log line is skipped and counted. Before, one truncated line hid every Claude Code subagent after it.
+
+### Metric
+
+Per ticket, minutes from the first commit to the last fix, and returns without a blocking finding (target: none). Per subagent, `stalls` against `min` in `scripts/session-stats`.
+
 ## v1.2.0 — unreleased
 
 v1.1 measured on the bench (`bench/README.md`) and cut back to what held up. Ticket 12 with review, one run each: v1.0 went back twice and ended right (22/22); v1.1 went back once and the reviewer passed it with three sheet formats still wrong (19/22).

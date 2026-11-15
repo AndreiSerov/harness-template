@@ -29,7 +29,7 @@ paths = [
 # v1.2: generic harness files only, no project files from a later state (they named things the
 # base lacks). The ticket lists the reviewer's acceptance checks, as workflow.md now asks.
 [variants.v1_2]
-ref = "retro-process"
+ref = "ec9b0f4"            # v1.2 on vovchik main; the retro-process branch was deleted after merge
 fresh_from_return = 2
 prompt_append = "acceptance.md"
 paths = [

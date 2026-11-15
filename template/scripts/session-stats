@@ -6,9 +6,11 @@ Reads the local session logs of Claude Code subagents, Codex and opencode, and t
   scripts/session-stats --since 2026-11-14
 
 Per ticket, from commits prefixed `NN: `: commits, review-fix commits, and the minutes from the
-first commit to the last fix. Per subagent: duration, review returns into the same context,
-responses cut off mid-stream, Bash timeouts, file writes through Bash versus Edit, peak context.
-The log formats are not public APIs; a source that fails to parse is reported and skipped.
+first commit to the last fix. Per subagent: duration, and how much of it went to stalls (pauses
+of over 3 minutes: the laptop asleep, a usage limit, waiting for a review), review returns into
+the same context, responses cut off mid-stream, Bash timeouts, file writes through Bash versus
+Edit, peak context. The log formats are not public APIs; an unreadable line is skipped and
+counted, and a source that fails to parse is reported and skipped.
 """
 
 import argparse
@@ -19,11 +21,13 @@ import subprocess
 import sys
 from collections import defaultdict
 from datetime import datetime
+from itertools import pairwise
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 HOME = Path.home()
 FIX = re.compile(r"review|ревью|fix|исправ|добить|правки", re.IGNORECASE)
+STALL = 180  # seconds; a longer pause between log entries is not work
 BASH_WRITE = re.compile(r"python3? - <<|\bcat > |\bsed -i|\btee ")
 
 
@@ -57,14 +61,19 @@ def tickets(since: float) -> None:
 def claude(since: float) -> None:
     folder = HOME / ".claude/projects" / re.sub(r"[^A-Za-z0-9]", "-", str(ROOT))
     print("\nClaude Code subagents")
-    print("type         min  returns  cut-offs  timeouts  bash-writes  edits  peak-context  description")
+    print("type         min  stalls  returns  cut-offs  timeouts  bash-writes  edits  peak-context  description")
+    unreadable = 0
     for path in sorted(folder.glob("*/subagents/*.jsonl")):
         meta_path = path.with_suffix(".meta.json")
         meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
         times, returns, cutoffs, timeouts, peak = [], 0, 0, 0, 0
         bash_writes, edits = set(), set()
         for line in path.read_text(encoding="utf-8").splitlines():
-            entry = json.loads(line)
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                unreadable += 1
+                continue
             if "timestamp" in entry:
                 times.append(stamp(entry["timestamp"]))
             message = entry.get("message") or {}
@@ -85,10 +94,14 @@ def claude(since: float) -> None:
         if not times or times[0] < since:
             continue
         minutes = (max(times) - min(times)) / 60
+        ordered = sorted(times)
+        stalls = sum(b - a for a, b in pairwise(ordered) if b - a > STALL) / 60
         print(
-            f"{meta.get('agentType', '?'):<11} {minutes:>4.0f}  {returns:>7}  {cutoffs:>8}  {timeouts:>8}"
+            f"{meta.get('agentType', '?'):<11} {minutes:>4.0f}  {stalls:>6.0f}  {returns:>7}  {cutoffs:>8}  {timeouts:>8}"
             f"  {bash_writes:>11}  {edits:>5}  {peak // 1000:>10}k  {meta.get('description', '')}"
         )
+    if unreadable:
+        print(f"({unreadable} unreadable log lines skipped)")
 
 
 def codex(since: float) -> None:
