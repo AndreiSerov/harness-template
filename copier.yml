@@ -14,9 +14,6 @@ _message_after_copy: |
     scripts/sync-skills
     scripts/doctor
   Then fill in the project sections of AGENTS.md and review scripts/check.
-  {%- if stack == "python-uv" %}
-  For parallel tests in scripts/check: uv add --dev pytest-xdist
-  {%- endif %}
   {%- if ci %}
   After the first push, protect main on GitHub and require the `check` status check.
   {%- endif %}

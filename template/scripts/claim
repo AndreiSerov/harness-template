@@ -5,7 +5,6 @@ A claim is a file in the git common directory, so every worktree and every agent
 Codex, opencode) sees it, and nothing goes into a commit.
 
   scripts/claim 05 --by implementer     take ticket 05, or fail and name who holds it
-  scripts/claim 05 --needs 1a2b3c4      also fail unless this checkout has commit 1a2b3c4
   scripts/claim 05 --release            give it back once the ticket passes review
   scripts/claim --list                  show open claims
 """
@@ -37,9 +36,6 @@ def main() -> int:
     parser.add_argument("--release", action="store_true")
     parser.add_argument("--force", action="store_true", help="take over a stale claim")
     parser.add_argument("--list", action="store_true")
-    parser.add_argument(
-        "--needs", metavar="COMMIT", help="the ticket's latest commit, which HEAD must contain"
-    )
     args = parser.parse_args()
     folder = claims_dir()
 
@@ -49,15 +45,6 @@ def main() -> int:
         return 0
     if not args.ticket or not re.fullmatch(r"[\w.-]+", args.ticket):
         parser.error("name a ticket, such as 05")
-
-    if args.needs:
-        has = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", args.needs, "HEAD"], capture_output=True, check=False
-        )
-        if has.returncode:
-            print(f"this checkout lacks {args.needs}, so it has an older version of the ticket.")
-            print("Stop and report this: merge or rebase onto the branch that has it, then claim again.")
-            return 1
 
     claim = folder / args.ticket
     if args.release:

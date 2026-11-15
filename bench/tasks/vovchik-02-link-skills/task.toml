@@ -1,0 +1,24 @@
+# Ticket 02 of vovchik-furniture-kit: scripts/link-skills. The lightest ticket that review sent
+# back for a real missed case (doctor did not see a link to a removed skill).
+repo = "git@github.com:AndreiSerov/vovchik-furniture-kit.git"
+base = "2dccd1e"          # the commit before the ticket
+first_handback = "b9a606d" # the historical first hand-back: 8/10 hidden tests
+final = "d969798"          # after two review rounds: 10/10
+
+# Harness variants: files taken from a git ref of the same repo and laid over the base.
+[variants.v1_0]
+ref = ""
+paths = []
+
+[variants.v1_1]
+ref = "retro-process"
+paths = [
+  ".claude/agents/implementer.md",
+  ".claude/agents/reviewer.md",
+  ".claude/settings.json",
+  ".claude/hooks/no-in-place-edit.sh",
+  "docs/agents/workflow.md",
+  "docs/agents/self-check.md",
+  "scripts/claim",
+  "CODING_STANDARDS.md",
+]

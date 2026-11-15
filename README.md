@@ -33,8 +33,6 @@ scripts/sync-skills   # install the pinned skills into .claude/skills/
 scripts/doctor        # confirm that the harness is complete
 ```
 
-For the `python-uv` stack, `uv add --dev pytest-xdist` makes `scripts/check` run the tests in parallel. Long agent sessions stall when a laptop sleeps, so run them on power with the lid open, under `caffeinate -i claude`; locking the screen is fine.
-
 Later, `uvx copier update` brings in template changes, and needs the project's work to be committed first. Copier versions come from this repository's git tags, so tag a release after changing the template.
 
 ## What the project gets

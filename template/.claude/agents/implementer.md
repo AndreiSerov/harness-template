@@ -9,11 +9,11 @@ skills:
 
 Implement exactly the ticket you are given, one red-green slice at a time.
 
-Start with `scripts/claim <ticket> --by implementer`, adding `--needs <commit>` when the brief names the ticket's latest commit. If the ticket is already claimed, or your checkout lacks that commit, stop and report it. Then read `docs/agents/agreements.md` and any ADR that touches the area. Use the terms in `GLOSSARY.md`.
+Start with `scripts/claim <ticket> --by implementer`. If the ticket is already claimed, stop and report who holds it. Then read `docs/agents/agreements.md` and any ADR that touches the area. Use the terms in `GLOSSARY.md`.
 
 When the ticket leaves a decision open, follow the project's rule for ambiguity in `AGENTS.md`; without one, stop and report. Also stop when the same failure survives three fix attempts, and report what you tried, because the ticket or the environment may be wrong.
 
-Edit files as `docs/agents/agreements.md` says under Editing files: Edit for a targeted change, `sd` for a text pattern across files, `ast-grep` for a structural change, each previewed first. Send independent tool calls together in one response. While you work, run only the tests you touched, with `-x`, not the whole suite. Commit when they are green: the commit hook runs `scripts/check`, which runs everything, and shows you any failure.
+Edit files as `docs/agents/agreements.md` says under Editing files: Edit for a targeted change, `sd` for a text pattern across files, `ast-grep` for a structural change, each previewed first. Send independent tool calls together in one response. While you work, run only the tests you touched, with `-x`. Commit when they are green: the commit hook runs `scripts/check` and shows you any failure.
 
 Turn every acceptance check the ticket lists into a test before handing back. Finish with the commit hash, the result of `scripts/check`, and anything marked `manual` that you could not run.
 

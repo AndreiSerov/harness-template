@@ -86,14 +86,6 @@ def check_git_hooks() -> list[str]:
     ]
 
 
-def on_battery() -> bool:
-    """macOS on battery: a long agent run stalls once the laptop sleeps."""
-    if not shutil.which("pmset"):
-        return False
-    done = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True, check=False)
-    return "Battery Power" in done.stdout
-
-
 def main() -> int:
     problems = [f"missing file: {f}" for f in REQUIRED_FILES if not (ROOT / f).is_file()]
     check = ROOT / "scripts/check"
@@ -107,10 +99,6 @@ def main() -> int:
     for tool, use in RECOMMENDED_TOOLS.items():
         if not shutil.which(tool):
             print(f"- note: {tool} is not installed ({use}); see the README's Prerequisites")
-    if on_battery():
-        print(
-            "- note: on battery; for a long run plug in, keep the lid open and use `caffeinate -i claude`"
-        )
     print("Harness OK" if not problems else f"{len(problems)} problem(s) found")
     return 1 if problems else 0
 
