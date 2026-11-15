@@ -10,7 +10,7 @@ Each run appends a line to `results.jsonl`: hidden tests and `scripts/check` per
 
 ## Variants
 
-A variant lays harness files over the task's base commit: `paths` from the project at `ref`, then `template_paths` from this repository's `template/` at the commit `template`, for a version the project hasn't got yet. Only plain files can come from the template, not `.jinja` ones. `workflow.md` matters little here, since the runner plays the coordinator.
+A variant lays harness files over the task's base commit: `paths` from the project at `ref`, then `template_paths` from this repository's `template/` at the commit `template`, for a version the project hasn't got yet. Only plain files can come from the template, not `.jinja` ones. `setup` lists shell commands run in the clone afterwards, for project changes a version asks for, such as a dev dependency. `workflow.md` matters little here, since the runner plays the coordinator.
 
 ## Adding a task
 
@@ -42,5 +42,17 @@ Historically the costliest ticket: 7 min of build, then 88 min of review fixes, 
 **v1_2.** Every first hand-back passed all hidden tests, against 21/22 for v1_0. The acceptance checks in the ticket name the same class of defect as the hidden tests, so this measures checks written into the ticket, not a more careful model. Every return was for a defect a probe confirmed and the hidden tests don't check: a non-guillotine `EngineError` on valid random part sets, then fractional millimetre fields accepted and rounded (run 1); fractional kerf and trim rounded down so that a part comes out 0.5 mm short (run 2); textured parts turned when a rotatable part shares the layout (run 3). No return was for style. Runs 2 and 3 cost less than run 1 mostly through one return instead of two.
 
 **v1_3**, one run. The first hand-back passed all hidden tests again. Two returns, both blocking and confirmed: kerf and trim rounded silently and a countertop sheet written short side first giving 6 sheets instead of 1; then a sheet that one part fills entirely crashing the layout at trim 0. Each re-review put its new minor findings on the end-of-stage list instead of sending them back, as v1.3 asks. Within the v1_2 range on time and cost. On this ticket v1.3 can show little: its other changes (`claim --needs`, parallel tests, the keep-awake rule) act on worktrees, a large suite and long sessions, which the bench doesn't have.
+
+## vovchik-33 (input guards)
+
+A hotfix: the workshop, orders and cutting refuse bad input. Historically two returns and 313 min from the first commit to the last fix, most of it a sleeping laptop; the first review found 4 blocking and 9 minor findings. Twelve hidden tests, one per finding that changes behaviour: 0/12 on the first hand-back `8b3af28`, 12/12 on the fix `ea8c5cb`.
+
+| Date | Variant | Returns | Hidden by round | Final | Min | USD (impl + review) | Responses |
+|---|---|---|---|---|---|---|---|
+| history | — | 2 | 0 → … → 12 | 12/12 | 313 | — | — |
+| 2026-11-15 | v1_2 | 1 | 0 → 8 | 8/12 | 24.0 | 6.56 (3.11 + 3.44) | 50 |
+| 2026-11-15 | v1_3 | 2 | 2 → 9 → 9 | 9/12 | 30.4 | 7.81 (3.82 + 3.99) | 88 |
+
+Unlike ticket 12, no first hand-back came close: both repeated the historical first build, the new YAML loader's regressions included. Both reviewers passed a ticket the hidden tests still fail. Three failures are common to both and are real defects, checked on v1_3's final code: `kitchen cut <order>` crashes with `FileExistsError` when the order's output folder is a file; the kerf warning says «пропил 4 мм» for a declared 4.0000001; the estimate, whose sheet count uses the rounded kerf, carries no kerf warning. None is in the spec's acceptance checks; the historical reviewer found them with mutations and deeper probes in 18 minutes, where these reviews took 7–9. v1_2 also passed with a negative hardware norm accepted. One run each: v1_3 ended one test higher at more cost, which this cannot separate from noise. What it does show is the reviewer's depth as the limit on this ticket, for both versions.
 
 Dropped: runs without review, which graded only the first hand-back; v1_1, whose overlay held project files from a later state and whose branch is gone (one run, 19/22, see `CHANGELOG.md`); two v1_2 runs voided by a usage limit; tasks 02 and 07, which had no reviewer's prompt and where every variant passed every hidden test.

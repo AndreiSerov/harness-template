@@ -54,7 +54,10 @@ def prepare(task: dict, variant: dict, source: str, skills_from: Path, work: Pat
         mode = sh("git", "ls-tree", at, source_path, cwd=repo).stdout.split()[0]
         if mode == "100755":
             target.chmod(0o755)
-    if overlays:
+    for command in variant.get("setup", []):
+        # Project changes a version asks for that are not harness files, such as a dev dependency.
+        sh("sh", "-c", command, cwd=work)
+    if overlays or variant.get("setup"):
         sh("git", "add", "-A", cwd=work)
         sh(
             "git",
@@ -280,6 +283,9 @@ def main() -> int:
         if fields["verdict"] == "ERROR":
             aborted = fields["review_report"][-300:]
 
+    # A run that ends with hidden tests failing keeps its clone, to check the failures on its code.
+    final = rounds[-1]
+    keep = args.keep or final["hidden_passed"] < final["hidden_total"]
     counts = {}
     for session in set(sessions):
         for key, value in transcript_counts(work, session).items():
@@ -301,7 +307,7 @@ def main() -> int:
         },
         "rounds": rounds,
         **counts,
-        "work": str(work) if args.keep else None,
+        "work": str(work) if keep else None,
     }
     with (BENCH / "results.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -310,7 +316,7 @@ def main() -> int:
         {k: v for k, v in r.items() if k != "review_report" and k != "commits"} for r in rounds
     ]
     print(json.dumps(summary, ensure_ascii=False, indent=1))
-    if not args.keep:
+    if not keep:
         shutil.rmtree(work.parent, ignore_errors=True)
     return 0
 
