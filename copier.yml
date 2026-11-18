@@ -33,6 +33,8 @@ stack:
   help: Stack, which decides what scripts/check runs
   choices:
     - python-uv
+    - node-pnpm
+    - rust-cargo
     - generic
   default: python-uv
 
@@ -56,7 +58,6 @@ optional_skills:
   choices:
     wayfinder: skills/engineering/wayfinder
     handoff: skills/productivity/handoff
-    improve-codebase-architecture: skills/engineering/improve-codebase-architecture
     wizard: skills/engineering/wizard
     wait-what: skills/productivity/wait-what
     to-questionnaire: skills/productivity/to-questionnaire

@@ -10,6 +10,8 @@ Agents in a generated project call these tools. `scripts/doctor` fails without t
 |---|---|---|
 | `git`, `python3` (3.11+) | required | the harness scripts |
 | `uv` | required for the `python-uv` stack | `scripts/check`, dependencies |
+| `node`, `pnpm` | required for the `node-pnpm` stack | `scripts/check`, dependencies |
+| `cargo` (rustup, with clippy and rustfmt) | required for the `rust-cargo` stack | `scripts/check`, dependencies |
 | `claude` (Claude Code 2.1.295+) | required | the hooks and subagents |
 | `rg` (ripgrep) | recommended | search |
 | `sd` | recommended | text replace across files, the same on macOS and Linux |

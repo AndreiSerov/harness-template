@@ -1,0 +1,89 @@
+# Carriers
+
+A design decision survives the build only when something fails the moment it is broken. [`design-review.md`](design-review.md) gives each decision a carrier. This file lists the carriers for this project's stack, cheapest first. Take the first row that catches the break, and add nothing heavier than that.
+
+The order holds in every stack:
+
+1. **The language or the build.** Visibility rules, package and crate boundaries, the type checker. These are free, and an agent can't forget them.
+2. **The linter that `scripts/check` already runs.** A banned import, a banned call, a missing `await`. Each is a few lines of config, with no new tool.
+3. **A boundary tool.** Layers, independence between modules, cycles. Add one only when the spec names more than a single banned import, because its contracts set the structure in place.
+4. **An `ast-grep` rule** for a code pattern that no linter knows, such as a slow call inside a transaction. Rules are heuristics: give each suppression its reason.
+5. **A test** for a property seen from outside, such as "ten jobs finish on a pool of two" or "a redelivered message makes no second call".
+
+Write boundary contracts during the design pass, once the spec names its modules. A contract written before the design is settled keeps the wrong structure in place.
+{%- if stack == "python-uv" %}
+
+## Python (uv)
+
+| Decision | Carrier |
+|---|---|
+| Only one package imports a library (e.g. only `db` imports `sqlalchemy`) | ruff `TID251` banned-api, with `per-file-ignores` for the package that may use it |
+| Layers, independence, no cycles | `import-linter` contracts (`layers`, `independence`, `forbidden` with `allow_indirect_imports`), run as `uv run lint-imports`; or `tach` |
+| Private names stay private | a leading `_` and `__all__`; pyright `reportPrivateUsage = "error"`; ruff `PLC2701` (preview) |
+| No blocking call in a coroutine | ruff `ASYNC` |
+| No forgotten `await` | pyright `reportUnusedCoroutine` |
+| No slow call inside a transaction | an `ast-grep` rule over `async with session.begin()`. It is exact once transactions live only in the data package and that package can't import the HTTP or gateway clients |
+| Lockfile matches `pyproject.toml` | `uv lock --check` |
+
+The banned-import row, as an example:
+
+```toml
+[tool.ruff.lint]
+extend-select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"sqlalchemy".msg = "Only the db package talks to the database"
+
+[tool.ruff.lint.per-file-ignores]
+"src/<package>/db/**" = ["TID251"]
+"migrations/**" = ["TID251"]
+"tests/**" = ["TID251"]
+```
+{%- elif stack == "node-pnpm" %}
+
+## TypeScript (pnpm)
+
+| Decision | Carrier |
+|---|---|
+| Only one package imports a library | ESLint `no-restricted-imports`, with a config block for the files that may use it |
+| Layers, independence, no cycles, entry points only | `dependency-cruiser` rules (`forbidden`, `no-circular`). A package's `exports` field in `package.json` hides everything else |
+| No floating promise | `@typescript-eslint/no-floating-promises` and `no-misused-promises` (type-aware linting) |
+| No blocking call on the event loop | `eslint-plugin-n` `n/no-sync` |
+| Types are checked | `tsc --noEmit` with `strict` |
+| No slow call inside a transaction | an `ast-grep` rule over the ORM's transaction callback |
+| Lockfile matches `package.json` | `pnpm install --frozen-lockfile` in CI |
+
+The banned-import row, as an example (flat config):
+
+```js
+{ rules: { "no-restricted-imports": ["error", { paths: [{ name: "pg", message: "Only src/db talks to the database" }] }] } },
+{ files: ["src/db/**"], rules: { "no-restricted-imports": "off" } },
+```
+{%- elif stack == "rust-cargo" %}
+
+## Rust (Cargo)
+
+| Decision | Carrier |
+|---|---|
+| Only one crate uses a library | the workspace: only that crate lists it in its `Cargo.toml`. `cargo-deny` `[bans]` with `wrappers` stops another crate from adding it |
+| Layers, no cycles | one crate per layer in a workspace. A crate sees only what it depends on, and Cargo refuses cycles between crates |
+| Private stays private | private by default; `pub(crate)` for what other modules of the crate need. Nothing is `pub` unless another crate needs it |
+| No lock held across `.await` | clippy `await_holding_lock` and `await_holding_refcell_ref` |
+| No blocking call in async code | clippy `disallowed_methods` in `clippy.toml`, such as `std::thread::sleep` and `std::fs::read_to_string` |
+| No unused future | the compiler's `unused_must_use`, turned into an error with `-D warnings` |
+| No slow call inside a transaction | an `ast-grep` rule between `begin()` and `commit()` |
+| Lockfile matches `Cargo.toml` | `cargo build --locked` in CI |
+
+The banned-library row, as an example:
+
+```toml
+# deny.toml
+[bans]
+deny = [{ crate = "sqlx", wrappers = ["db"] }]
+```
+{%- else %}
+
+## This stack
+
+The template has no table for this stack yet. Keep the order above. Write the project's own table under Conventions in `AGENTS.md`, and send it to the template once a project has used it.
+{%- endif %}

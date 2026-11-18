@@ -9,6 +9,10 @@
 - Turn a rule into a check when you can: a failing `scripts/check` beats a sentence in this file.
 {%- if stack == "python-uv" %}
 - A `# noqa` states its reason on the same or the previous line.
+{%- elif stack == "node-pnpm" %}
+- An `eslint-disable` comment states its reason after `--` on the same line, and a `@ts-expect-error` states it after the directive.
+{%- elif stack == "rust-cargo" %}
+- Silence a lint with `#[expect(lint, reason = "...")]`, not a bare `#[allow]`.
 {%- endif %}
 
 ## Editing files

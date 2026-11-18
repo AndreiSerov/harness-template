@@ -12,10 +12,23 @@ jobs:
       - uses: actions/checkout@v4
 {%- if stack == "python-uv" %}
       - uses: astral-sh/setup-uv@v6
+{%- elif stack == "node-pnpm" %}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+{%- elif stack == "rust-cargo" %}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 {%- endif %}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+{%- if stack == "node-pnpm" %}
+      - run: pnpm install --frozen-lockfile
+{%- endif %}
       - run: scripts/sync-skills
       - run: scripts/doctor
       - run: scripts/check

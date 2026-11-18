@@ -28,4 +28,15 @@ dist/
 .venv/
 .pytest_cache/
 .ruff_cache/
+{%- elif stack == "node-pnpm" %}
+
+### Node ###
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+{%- elif stack == "rust-cargo" %}
+
+### Rust ###
+target/
 {%- endif %}

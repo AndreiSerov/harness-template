@@ -2,6 +2,41 @@
 
 Each release records what changed in the harness, what agent behaviour it is meant to change, and the metric that shows whether it did. `scripts/session-stats` in a generated project gives the numbers. Fill **Observed** once a project has finished a stage on the release, and compare it with the baseline of the release before.
 
+## Design pass — unreleased, on top of v1.2.0
+
+From the retro of `test-proj-mccbasis`, a test task built on v1.0 (one spec, 7 tickets and 6 hardening tickets). An outside reviewer of the finished service found four design faults, and every one of them traces back to the harness:
+
+- The spec asked for a repository layer in one line of Implementation Decisions. No ticket repeated it, the tests are black-box by design, and the reviewer checked against the ticket, so queries, locks and transactions ended up in the router, the handler and the Relay.
+- The spec itself told the handler to run the 2–5 s Emulator inside a `SELECT … FOR UPDATE` transaction, and accepted a repeated Webhook on every redelivery. Grilling settles what the user wants, and no step asked what a design holds while it waits or what a second run does.
+- Hardening tickets added SSRF pinning, URL masking and NUL checks (about 240 of 1,400 lines). The reviewer called it too much for a test task. The spec never said who the reader was or how much of their time the result gets.
+- `skill-scout` never ran, because nothing in the workflow starts it. `codebase-design` was installed but never loaded, because only `tdd` points to it, and only when an implementer questions an interface's shape.
+
+### Changes
+
+- Workflow: a Design step between Spec and Tickets. The main session takes the spec through the new `docs/agents/design-review.md`: module shape with `codebase-design`, what is held while waiting, what grows with load, what a second run does, the failure path, and the reader's budget. The spec changes, and the user confirms the changes. Each decision leaves with a carrier (a check in `scripts/check`, an acceptance check, or a line in every ticket it touches), and `/to-tickets` keeps it.
+- Reviewer: checks against the ticket and the spec it comes from, including Implementation Decisions. It used to say "spec or ticket", which let a ticket-only review pass code that broke the spec's layout.
+- `skill-scout`: runs once when the project starts and again when a spec brings in a new stack or kind of system. It also searches by the kind of system and its failure modes, not by stack and domain alone.
+- `skill-scout`: proposes nothing only after at least five differently worded searches and a look at the known collections, and lists its searches. A first pass on `test-proj-mccbasis` concluded "nothing fits" after two searches.
+- `docs/agents/carriers.md`: the carriers for the project's stack, cheapest first: language or build, the linter already in `scripts/check`, a boundary tool, an `ast-grep` rule, a test. The design pass picks the first one that catches the break and writes boundary contracts once the spec names its modules. On `test-proj-mccbasis`, ruff `TID251` with `per-file-ignores` caught the same 9 imports as an `import-linter` contract, with no new tool.
+- Design pass: its own budget. Each question gets the simplest change that fixes it, and anything heavier is offered to the user. A blind run on `test-proj-mccbasis` added a lease column, a timeout and a requeue path where a compare-and-set was enough.
+- Design pass names the skills for each kind of question. `DEEPENING.md` in `codebase-design` sorts each module's dependencies, which decides the seam and the tests. `research` covers a library's real behaviour, `prototype` a race that can't be settled on paper, `DESIGN-IT-TWICE.md` one unclear central module within the budget, and `domain-modeling` new terms and lasting decisions. Before, only `codebase-design` was named, and in the build session of `test-proj-mccbasis` none of these ran.
+- `improve-codebase-architecture` moves from the optional skills to the core set. The user runs it at Ship when a stage built several tickets. On `test-proj-mccbasis` it found a missing timeout that no review had caught.
+- Stacks `node-pnpm` and `rust-cargo`, next to `python-uv` and `generic`: `scripts/check`, CI setup, `.gitignore`, the lint-suppression rule in `agreements.md` and a carriers table each. The TypeScript and Rust tables come from the tools' documentation and have not run on a project yet.
+
+### Expected
+
+- No spec reaches `/to-tickets` with a slow call inside a transaction or lock, or with an external side effect that has no record of having happened.
+- Every layering decision in a spec has a check in `scripts/check` from the first ticket.
+- Fewer late findings from outside review on structure and resource use. Measure them as findings per stage that trace back to the spec rather than the code.
+
+### Observed
+
+`test-proj-mccbasis`, one run each in a clean Claude Code session on Opus, before the budget rule and `carriers.md`:
+
+- Design pass on the original spec, with no code yet ($0.75, 3 min). It found the Emulator inside `FOR UPDATE`, the pool tied to the concurrency, the missing layering check and the reader's budget. It saw the repeated Webhook but put it under Out of Scope as a question for the user. It over-built the fix (a lease).
+- `/improve-codebase-architecture` on the finished code, for comparison ($1.50, 5 min). It found none of the outside reviewer's points except, partly, the logic in the route. It did find a likely bug the reviewer missed: the retry republish has no timeout.
+- Caveat: `design-review.md` was written after the outside review, so its questions name those faults. A project with different faults is the real test.
+
 ## v1.2.0 — unreleased
 
 v1.1 measured on the bench (`bench/README.md`) and cut back to what held up. Ticket 12 with review, one run each: v1.0 went back twice and ended right (22/22); v1.1 went back once and the reviewer passed it with three sheet formats still wrong (19/22).

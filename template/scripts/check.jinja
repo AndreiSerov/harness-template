@@ -7,6 +7,14 @@ cd "$(dirname "$0")/.."
 uv run ruff check
 uv run ruff format --check
 uv run pytest -q -x
+{%- elif stack == "node-pnpm" %}
+pnpm exec tsc --noEmit
+pnpm exec eslint .
+pnpm test
+{%- elif stack == "rust-cargo" %}
+cargo fmt --check
+cargo clippy --all-targets --locked -- -D warnings
+cargo test --locked
 {%- else %}
 echo "scripts/check is not configured yet: add this project's tests and linters." >&2
 exit 1

@@ -93,6 +93,8 @@ def test_python_project_has_the_expected_files_and_executables(template, tmp_pat
         "docs/agents/workflow.md",
         "docs/agents/agreements.md",
         "docs/agents/issue-tracker.md",
+        "docs/agents/design-review.md",
+        "docs/agents/carriers.md",
         ".claude/agents/implementer.md",
         ".claude/agents/reviewer.md",
         ".claude/agents/skill-scout.md",
@@ -139,6 +141,33 @@ def test_skills_manifest_is_valid_and_includes_chosen_optional_skills(template, 
 def test_generic_stack_check_fails_until_configured(template, tmp_path):
     project = render(template, tmp_path / "p", stack="generic")
     assert run("scripts/check", cwd=project, check=False).returncode == 1
+
+
+@pytest.mark.parametrize(
+    ("stack", "check_command", "carriers_heading", "ignored", "ci_step"),
+    [
+        ("python-uv", "uv run pytest", "## Python (uv)", ".venv/", "astral-sh/setup-uv"),
+        (
+            "node-pnpm",
+            "pnpm exec tsc --noEmit",
+            "## TypeScript (pnpm)",
+            "node_modules/",
+            "pnpm install --frozen-lockfile",
+        ),
+        ("rust-cargo", "cargo clippy", "## Rust (Cargo)", "target/", "dtolnay/rust-toolchain"),
+        ("generic", "not configured yet", "## This stack", "### Secrets ###", "scripts/check"),
+    ],
+)
+def test_each_stack_gets_its_check_carriers_ignores_and_ci(
+    template, tmp_path, stack, check_command, carriers_heading, ignored, ci_step
+):
+    project = render(template, tmp_path / "p", stack=stack)
+    assert check_command in (project / "scripts/check").read_text()
+    carriers = (project / "docs/agents/carriers.md").read_text()
+    assert carriers_heading in carriers
+    assert carriers.count("\n## ") == 1, "only the chosen stack's table is rendered"
+    assert ignored in (project / ".gitignore").read_text()
+    assert ci_step in (project / ".github/workflows/check.yml").read_text()
 
 
 def test_optional_files_follow_the_answers(template, tmp_path):
